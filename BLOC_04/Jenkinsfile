@@ -29,6 +29,7 @@ pipeline {
             steps {
                 dir("${WORK_DIR}") {
                     sh '''
+                        export PYTHONPATH=$PYTHONPATH:$WORKSPACE/${WORK_DIR}/plugins
                         mkdir -p reports/unit
                         pytest tests/unit \
                             --junitxml=reports/unit/report.xml \
