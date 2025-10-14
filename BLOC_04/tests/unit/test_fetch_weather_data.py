@@ -46,7 +46,7 @@ def test_fetch_weather_data(mock_file, mock_var, mock_get):
     file_path = mock_file.call_args[0][0]
     assert file_path.startswith("/tmp/")
     assert file_path.endswith("_weather.json")
-    assert "w" in mock_file.call_args[1]["mode"]
+    assert mock_file.call_args[0][1] == "w"
     
     # 3. XCom push a été appelé avec le bon chemin
     mock_ti.xcom_push.assert_called_once()
