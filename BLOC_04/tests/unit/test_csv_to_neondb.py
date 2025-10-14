@@ -4,15 +4,21 @@ import sys
 from unittest.mock import patch, MagicMock
 import pytest
 
-# Mock du module custom pour éviter ImportError à l'import
-sys.modules["s3_to_postgres"] = MagicMock()
+# 🔑 NE PAS mock sys.modules["s3_to_postgres"] → cela casse tout !
 
-# ⚠️ On importe APRÈS le mock
+# ✅ Import direct (nécessite que le fichier soit trouvable)
+# Assure-toi que le dossier parent de `s3_to_postgres.py` est dans le PYTHONPATH
+# Ou place ce fichier dans un package valide.
+
+# Pour que pytest trouve s3_to_postgres.py, on l'ajoute temporairement au path
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "plugins"))
+
 from s3_to_postgres import S3ToPostgresOperator
 
 
-@patch("s3_to_postgres.S3Hook")          # ✅ Patch dans le namespace du module
-@patch("s3_to_postgres.PostgresHook")    # ✅ Même chose pour PostgresHook
+@patch("s3_to_postgres.S3Hook")
+@patch("s3_to_postgres.PostgresHook")
 @patch("s3_to_postgres.pd.read_csv")
 def test_s3_to_postgres_operator(mock_read_csv, mock_postgres_hook_class, mock_s3_hook_class):
     """Test que l'opérateur S3ToPostgres télécharge le CSV et l'écrit en base."""
