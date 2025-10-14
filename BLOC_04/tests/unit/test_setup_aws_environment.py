@@ -1,10 +1,12 @@
+# tests/test_setup_aws_environment.py
+
 import os
 from unittest.mock import patch
 import pytest
-from dags.meteo_paris import setup_aws_environment
+from dags.weather_utils import setup_aws_environment
 
 
-@patch("dags.meteo_paris.Variable.get")
+@patch("dags.weather_utils.Variable.get")
 def test_setup_aws_environment(mock_get):
     """Test de la configuration des variables AWS"""
     
@@ -30,13 +32,12 @@ def test_setup_aws_environment(mock_get):
     mock_get.assert_any_call("AWS_DEFAULT_REGION")
 
 
-@patch("dags.meteo_paris.Variable.get")
+@patch("dags.weather_utils.Variable.get")
 def test_setup_aws_environment_missing_variable(mock_get):
     """Test de gestion d'erreur si une variable est manquante"""
     
-    # Simuler une erreur KeyError (variable manquante)
-    from airflow.exceptions import AirflowException
-    mock_get.side_effect = AirflowException("Variable AWS_ACCESS_KEY_ID not found")
+    # Simuler une exception (comme AirflowException ou KeyError)
+    mock_get.side_effect = Exception("Variable not found")
     
     # Nettoyer les variables d'environnement
     for key in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION"]:
@@ -47,17 +48,21 @@ def test_setup_aws_environment_missing_variable(mock_get):
         setup_aws_environment()
 
 
-@patch("dags.meteo_paris.Variable.get")
+@patch("dags.weather_utils.Variable.get")
 def test_setup_aws_environment_cleanup(mock_get):
-    """Test avec nettoyage après exécution"""
+    """Test avec nettoyage après exécution (bonne pratique pour l'isolation des tests)"""
     
     mock_get.side_effect = ["TEST_KEY", "TEST_SECRET", "us-east-1"]
+    
+    # Nettoyage initial
+    for key in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION"]:
+        os.environ.pop(key, None)
     
     # Setup
     setup_aws_environment()
     
     assert os.environ["AWS_ACCESS_KEY_ID"] == "TEST_KEY"
     
-    # Cleanup pour ne pas polluer les autres tests
+    # Cleanup explicite pour ne pas polluer les autres tests
     for key in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION"]:
         os.environ.pop(key, None)
