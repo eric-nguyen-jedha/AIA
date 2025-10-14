@@ -1,0 +1,85 @@
+pipeline {
+    agent {
+        docker {
+            image 'python:3.10-slim'
+        }
+    }
+
+    environment {
+        REPORT_DIR = "reports"
+        UNIT_REPORT = "${REPORT_DIR}/unit"
+        INTEGRATION_REPORT = "${REPORT_DIR}/integration"
+    }
+
+    stages {
+        stage('📦 Install dependencies') {
+            steps {
+                sh '''
+                    apt-get update && apt-get install -y --no-install-recommends libpq-dev gcc
+                    pip install --upgrade pip
+                    pip install -r requirements.txt
+                    pip install pytest pytest-html pytest-mock
+                '''
+            }
+        }
+
+        stage('🧪 Run unit tests') {
+            steps {
+                sh '''
+                    mkdir -p ${UNIT_REPORT}
+                    pytest tests/unit -v --maxfail=1 --disable-warnings \
+                        --junitxml=${UNIT_REPORT}/report.xml \
+                        --html=${UNIT_REPORT}/report.html \
+                        --self-contained-html
+                '''
+            }
+        }
+
+        stage('🔗 Run integration tests') {
+            steps {
+                sh '''
+                    mkdir -p ${INTEGRATION_REPORT}
+                    pytest tests/integration -v --maxfail=1 --disable-warnings \
+                        --junitxml=${INTEGRATION_REPORT}/report.xml \
+                        --html=${INTEGRATION_REPORT}/report.html \
+                        --self-contained-html
+                '''
+            }
+        }
+
+        stage('📊 Publish reports') {
+            steps {
+                junit allowEmptyResults: true, testResults: "${REPORT_DIR}/**/report.xml"
+                publishHTML(target: [
+                    allowMissing: false,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: "${UNIT_REPORT}",
+                    reportFiles: "report.html",
+                    reportName: "Unit Test Report"
+                ])
+                publishHTML(target: [
+                    allowMissing: false,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: "${INTEGRATION_REPORT}",
+                    reportFiles: "report.html",
+                    reportName: "Integration Test Report"
+                ])
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ All tests passed successfully!"
+        }
+        failure {
+            echo "❌ Tests failed — check the Jenkins HTML reports."
+        }
+        always {
+            echo "🧹 Cleaning up temporary files..."
+            sh "rm -rf ${REPORT_DIR} || true"
+        }
+    }
+}
