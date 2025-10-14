@@ -4,31 +4,31 @@ import sys
 from unittest.mock import patch, MagicMock
 import pytest
 
-# Mock du module custom pour éviter ImportError lors de l'import
+# Mock du module custom pour éviter ImportError à l'import
 sys.modules["s3_to_postgres"] = MagicMock()
 
-# ⚠️ IMPORTANT : on importe APRÈS le mock
+# ⚠️ On importe APRÈS le mock
 from s3_to_postgres import S3ToPostgresOperator
 
 
-@patch("s3_to_postgres.S3Hook")  # ✅ CORRECT : c'est l'import DANS s3_to_postgres.py
-@patch("s3_to_postgres.PostgresHook")
+@patch("s3_to_postgres.S3Hook")          # ✅ Patch dans le namespace du module
+@patch("s3_to_postgres.PostgresHook")    # ✅ Même chose pour PostgresHook
 @patch("s3_to_postgres.pd.read_csv")
 def test_s3_to_postgres_operator(mock_read_csv, mock_postgres_hook_class, mock_s3_hook_class):
     """Test que l'opérateur S3ToPostgres télécharge le CSV et l'écrit en base."""
     
-    # Mocks
+    # Mock S3Hook
     mock_s3_instance = MagicMock()
     mock_s3_hook_class.return_value = mock_s3_instance
+    mock_s3_instance.download_file.return_value = "/tmp/weather_paris_fect.csv"
+
+    # Mock PostgresHook
     mock_postgres_instance = MagicMock()
     mock_postgres_hook_class.return_value = mock_postgres_instance
     mock_engine = MagicMock()
     mock_postgres_instance.get_sqlalchemy_engine.return_value = mock_engine
 
-    # Simuler le téléchargement → retourne un chemin local
-    mock_s3_instance.download_file.return_value = "/tmp/weather_paris_fect.csv"
-
-    # Simuler le DataFrame
+    # Mock DataFrame
     mock_df = MagicMock()
     mock_read_csv.return_value = mock_df
 
