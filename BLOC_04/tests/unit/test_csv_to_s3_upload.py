@@ -25,17 +25,7 @@ def test_csv_uploaded_to_s3(
     mock_ti = MagicMock()
     mock_ti.xcom_pull.return_value = "/tmp/test_weather.json"
     context = {"ti": mock_ti}
-    
-    # Simuler JSON existant
-    fake_json = {
-        "dt": 1700000000,
-        "main": {"temp": 20, "feels_like": 19, "pressure": 1000, "humidity": 50},
-        "clouds": {"all": 10},
-        "wind": {"speed": 3.5, "deg": 180},
-        "weather": [{"main": "Clear", "description": "sunny"}],
-        "visibility": 10000,
-        "rain": {"1h": 0.5}
-    }
+
     mock_exists.return_value = True
     mock_file.return_value.read.return_value = json.dumps({
     "dt": 1700000000,
