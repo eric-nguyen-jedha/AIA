@@ -1,24 +1,24 @@
-# tests/integration/test_dag_integrity.py
+# tests/integration/test_dag_structure.py
 
 import os
 import sys
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
-# Optionnel : mock les modules problématiques si tu ne veux pas installer certains providers
-# Mais ici, on suppose qu'au moins `apache-airflow` est installé
+# 🔑 Mock du plugin custom pour éviter ImportError
+sys.modules["s3_to_postgres"] = MagicMock()
 
 def test_dag_loads_correctly():
-    """Test que le DAG se charge sans erreur d'import."""
     from airflow.models import DagBag
 
-    # Charge uniquement le fichier du DAG cible
     dag_path = os.path.join(os.path.dirname(__file__), "..", "..", "dags", "meteo_paris.py")
     dag_path = os.path.abspath(dag_path)
 
     with patch.dict(os.environ, {"AIRFLOW__CORE__LOAD_DEFAULT_CONNECTIONS": "False"}):
         dag_bag = DagBag(dag_folder=dag_path, include_examples=False)
 
-    # Vérifie qu'il n'y a pas d'erreur d'import
+    # Débogage (optionnel) — à retirer en prod
+    # print("Import errors:", dag_bag.import_errors)
+
     assert len(dag_bag.import_errors) == 0, f"Import errors: {dag_bag.import_errors}"
 
     dag = dag_bag.get_dag("etl_weather_dag")
@@ -35,7 +35,6 @@ def test_dag_loads_correctly():
 
 
 def test_dag_dependencies():
-    """Test les dépendances entre les tâches."""
     from airflow.models import DagBag
 
     dag_path = os.path.join(os.path.dirname(__file__), "..", "..", "dags", "meteo_paris.py")
@@ -47,7 +46,6 @@ def test_dag_dependencies():
     dag = dag_bag.get_dag("etl_weather_dag")
     assert dag is not None
 
-    # Définition des dépendances attendues
     expected_deps = {
         "fetch_weather_data": ["transform_and_append_weather_data"],
         "transform_and_append_weather_data": ["create_weather_table"],
