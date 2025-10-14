@@ -14,10 +14,22 @@ pipeline {
     }
 
     stages {
+        stage('Check workspace structure') {
+            steps {
+                sh '''
+                    echo "=== Current directory ==="
+                    pwd
+                    echo "=== Directory contents ==="
+                    ls -la
+                    echo "=== Looking for requirements.txt ==="
+                    find . -name "requirements.txt" -type f
+                '''
+            }
+        }
+
         stage('Install dependencies') {
             steps {
                 sh '''
-                    cd ${WORK_DIR}
                     apt-get update && apt-get install -y --no-install-recommends gcc
                     pip install --upgrade pip
                     pip install -r requirements.txt
@@ -28,11 +40,10 @@ pipeline {
         stage('Run unit tests') {
             steps {
                 sh '''
-                    cd ${WORK_DIR}
-                    mkdir -p ${REPORT_DIR}/unit
+                    mkdir -p ${UNIT_REPORT}
                     pytest tests/unit \
-                        --junitxml=${REPORT_DIR}/unit/report.xml \
-                        --html=${REPORT_DIR}/unit/report.html \
+                        --junitxml=${UNIT_REPORT}/report.xml \
+                        --html=${UNIT_REPORT}/report.html \
                         --self-contained-html
                 '''
             }
@@ -41,11 +52,10 @@ pipeline {
         stage('Run integration tests') {
             steps {
                 sh '''
-                    cd ${WORK_DIR}
-                    mkdir -p ${REPORT_DIR}/integration
+                    mkdir -p ${INTEGRATION_REPORT}
                     pytest tests/integration \
-                        --junitxml=${REPORT_DIR}/integration/report.xml \
-                        --html=${REPORT_DIR}/integration/report.html \
+                        --junitxml=${INTEGRATION_REPORT}/report.xml \
+                        --html=${INTEGRATION_REPORT}/report.html \
                         --self-contained-html
                 '''
             }
@@ -53,14 +63,14 @@ pipeline {
 
         stage('Publish reports') {
             steps {
-                junit allowEmptyResults: true, testResults: "${WORK_DIR}/${REPORT_DIR}/**/report.xml"
+                junit allowEmptyResults: true, testResults: "${REPORT_DIR}/**/report.xml"
                 publishHTML(target: [
-                    reportDir: "${WORK_DIR}/${REPORT_DIR}/unit",
+                    reportDir: "${UNIT_REPORT}",
                     reportFiles: "report.html",
                     reportName: "Unit Tests"
                 ])
                 publishHTML(target: [
-                    reportDir: "${WORK_DIR}/${REPORT_DIR}/integration",
+                    reportDir: "${INTEGRATION_REPORT}",
                     reportFiles: "report.html",
                     reportName: "Integration Tests"
                 ])
