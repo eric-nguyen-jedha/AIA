@@ -80,7 +80,7 @@ pipeline {
                         <p>Cordialement,<br/>Jenkins CI</p>
                     """,
                     recipientProviders: [[$class: 'DevelopersRecipientProvider']],
-                    to: 'ton.email@domaine.com',
+                    to: 'enguyen.fr@gmail.com',
                     mimeType: 'text/html'
                 )
             }
@@ -103,7 +103,7 @@ pipeline {
                         <p>Cordialement,<br/>Jenkins CI</p>
                     """,
                     recipientProviders: [[$class: 'DevelopersRecipientProvider']],
-                    to: 'ton.email@domaine.com',
+                    to: 'enguyen.fr@gmail.com',
                     mimeType: 'text/html'
                 )
             }
