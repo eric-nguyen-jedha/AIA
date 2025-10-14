@@ -1,17 +1,17 @@
-#✅ Test 2 — _fetch_weather_data
+#✅ Test 2 — fetch_weather_data
 
 import json
 import os
 from unittest.mock import patch, MagicMock, mock_open
 import pytest
-from dags.meteo_paris import _fetch_weather_data
+from dags.weather_utils import fetch_weather_data  # ✅ Import propre depuis le module utilitaire
 
 
-@patch("dags.meteo_paris.requests.get")
-@patch("dags.meteo_paris.Variable.get")
+@patch("dags.weather_utils.requests.get")
+@patch("dags.weather_utils.Variable.get")
 @patch("builtins.open", new_callable=mock_open)
 def test_fetch_weather_data(mock_file, mock_var, mock_get):
-    """Test de la fonction _fetch_weather_data"""
+    """Test de la fonction fetch_weather_data"""
     
     # Mock de la Variable Airflow
     mock_var.return_value = "FAKE_API_KEY"
@@ -32,7 +32,7 @@ def test_fetch_weather_data(mock_file, mock_var, mock_get):
     context = {"ti": mock_ti}
     
     # Exécution de la fonction
-    _fetch_weather_data(**context)
+    fetch_weather_data(**context)
     
     # Vérifications
     # 1. L'API a été appelée avec les bons paramètres
@@ -46,7 +46,7 @@ def test_fetch_weather_data(mock_file, mock_var, mock_get):
     file_path = mock_file.call_args[0][0]
     assert file_path.startswith("/tmp/")
     assert file_path.endswith("_weather.json")
-    assert "w" in mock_file.call_args[1]["mode"] if len(mock_file.call_args) > 1 else True
+    assert "w" in mock_file.call_args[1]["mode"]
     
     # 3. XCom push a été appelé avec le bon chemin
     mock_ti.xcom_push.assert_called_once()
@@ -61,8 +61,8 @@ def test_fetch_weather_data(mock_file, mock_var, mock_get):
 
 
 # Test avec erreur API
-@patch("dags.meteo_paris.requests.get")
-@patch("dags.meteo_paris.Variable.get")
+@patch("dags.weather_utils.requests.get")
+@patch("dags.weather_utils.Variable.get")
 def test_fetch_weather_data_api_error(mock_var, mock_get):
     """Test de gestion d'erreur API"""
     
@@ -78,4 +78,4 @@ def test_fetch_weather_data_api_error(mock_var, mock_get):
     
     # Doit lever une ValueError
     with pytest.raises(ValueError, match="Erreur API : 401"):
-        _fetch_weather_data(**context)
+        fetch_weather_data(**context)
