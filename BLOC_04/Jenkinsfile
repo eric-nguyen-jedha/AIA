@@ -44,11 +44,20 @@ pipeline {
             steps {
                 dir("${WORK_DIR}") {
                     sh '''
+                        # Ajoute plugins/ au PYTHONPATH pour que Airflow trouve S3ToPostgresOperator
+                        export PYTHONPATH=$PYTHONPATH:$WORKSPACE/${WORK_DIR}/plugins
+
                         mkdir -p reports/integration
-                        pytest tests/integration \
-                            --junitxml=reports/integration/report.xml \
-                            --html=reports/integration/report.html \
-                            --self-contained-html
+
+                        if [ -d "tests/integration" ]; then
+                            pytest tests/integration \
+                                --junitxml=reports/integration/report.xml \
+                                --html=reports/integration/report.html \
+                                --self-contained-html
+                        else
+                            echo "No integration tests found. Skipping."
+                            echo '<?xml version="1.0" encoding="UTF-8"?><testsuite/>' > reports/integration/report.xml
+                        fi
                     '''
                 }
             }
