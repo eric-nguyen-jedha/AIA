@@ -12,22 +12,21 @@ pipeline {
     }
 
     stages {
-        stage('📦 Install dependencies') {
+        stage('Install dependencies') {
             steps {
                 sh '''
-                    apt-get update && apt-get install -y --no-install-recommends libpq-dev gcc
+                    apt-get update && apt-get install -y --no-install-recommends gcc
                     pip install --upgrade pip
                     pip install -r requirements.txt
-                    pip install pytest pytest-html pytest-mock
                 '''
             }
         }
 
-        stage('🧪 Run unit tests') {
+        stage('Run unit tests') {
             steps {
                 sh '''
                     mkdir -p ${UNIT_REPORT}
-                    pytest tests/unit -v --maxfail=1 --disable-warnings \
+                    pytest tests/unit \
                         --junitxml=${UNIT_REPORT}/report.xml \
                         --html=${UNIT_REPORT}/report.html \
                         --self-contained-html
@@ -35,11 +34,11 @@ pipeline {
             }
         }
 
-        stage('🔗 Run integration tests') {
+        stage('Run integration tests') {
             steps {
                 sh '''
                     mkdir -p ${INTEGRATION_REPORT}
-                    pytest tests/integration -v --maxfail=1 --disable-warnings \
+                    pytest tests/integration \
                         --junitxml=${INTEGRATION_REPORT}/report.xml \
                         --html=${INTEGRATION_REPORT}/report.html \
                         --self-contained-html
@@ -47,24 +46,18 @@ pipeline {
             }
         }
 
-        stage('📊 Publish reports') {
+        stage('Publish reports') {
             steps {
                 junit allowEmptyResults: true, testResults: "${REPORT_DIR}/**/report.xml"
                 publishHTML(target: [
-                    allowMissing: false,
-                    alwaysLinkToLastBuild: true,
-                    keepAll: true,
                     reportDir: "${UNIT_REPORT}",
                     reportFiles: "report.html",
-                    reportName: "Unit Test Report"
+                    reportName: "Unit Tests"
                 ])
                 publishHTML(target: [
-                    allowMissing: false,
-                    alwaysLinkToLastBuild: true,
-                    keepAll: true,
                     reportDir: "${INTEGRATION_REPORT}",
                     reportFiles: "report.html",
-                    reportName: "Integration Test Report"
+                    reportName: "Integration Tests"
                 ])
             }
         }
@@ -72,14 +65,48 @@ pipeline {
 
     post {
         success {
-            echo "✅ All tests passed successfully!"
+            echo "✅ All tests passed!"
+            script {
+                emailext(
+                    subject: "✅ Tests réussis - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    body: """
+                        <p>Bonjour,</p>
+                        <p>Les tests de <b>${env.JOB_NAME}</b> (build #${env.BUILD_NUMBER}) ont été exécutés avec succès.</p>
+                        <p>Vous pouvez consulter les rapports détaillés :</p>
+                        <ul>
+                          <li><a href="${env.BUILD_URL}HTML_20Report_20(Unit_20Tests)/report.html">Unit Tests</a></li>
+                          <li><a href="${env.BUILD_URL}HTML_20Report_20(Integration_20Tests)/report.html">Integration Tests</a></li>
+                        </ul>
+                        <p>Cordialement,<br/>Jenkins CI</p>
+                    """,
+                    recipientProviders: [[$class: 'DevelopersRecipientProvider']],
+                    to: 'ton.email@domaine.com',
+                    mimeType: 'text/html'
+                )
+            }
         }
+
         failure {
-            echo "❌ Tests failed — check the Jenkins HTML reports."
-        }
-        always {
-            echo "🧹 Cleaning up temporary files..."
-            sh "rm -rf ${REPORT_DIR} || true"
+            echo "❌ Some tests failed."
+            script {
+                emailext(
+                    subject: "❌ Échec des tests - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    body: """
+                        <p>Bonjour,</p>
+                        <p>Les tests de <b>${env.JOB_NAME}</b> (build #${env.BUILD_NUMBER}) ont échoué.</p>
+                        <p>Consultez les rapports détaillés :</p>
+                        <ul>
+                          <li><a href="${env.BUILD_URL}HTML_20Report_20(Unit_20Tests)/report.html">Unit Tests</a></li>
+                          <li><a href="${env.BUILD_URL}HTML_20Report_20(Integration_20Tests)/report.html">Integration Tests</a></li>
+                        </ul>
+                        <p>Merci de corriger les erreurs dès que possible.</p>
+                        <p>Cordialement,<br/>Jenkins CI</p>
+                    """,
+                    recipientProviders: [[$class: 'DevelopersRecipientProvider']],
+                    to: 'ton.email@domaine.com',
+                    mimeType: 'text/html'
+                )
+            }
         }
     }
 }
