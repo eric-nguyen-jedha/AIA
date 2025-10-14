@@ -2,6 +2,7 @@ pipeline {
     agent {
         docker {
             image 'python:3.10-slim'
+            args '-u root:root'
         }
     }
 
@@ -79,8 +80,9 @@ pipeline {
                         </ul>
                         <p>Cordialement,<br/>Jenkins CI</p>
                     """,
-                    recipientProviders: [[$class: 'DevelopersRecipientProvider']],
                     to: 'enguyen.fr@gmail.com',
+                    from: 'enguyen.fr@gmail.com',
+                    replyTo: 'enguyen.fr@gmail.com',
                     mimeType: 'text/html'
                 )
             }
@@ -102,8 +104,9 @@ pipeline {
                         <p>Merci de corriger les erreurs dès que possible.</p>
                         <p>Cordialement,<br/>Jenkins CI</p>
                     """,
-                    recipientProviders: [[$class: 'DevelopersRecipientProvider']],
                     to: 'enguyen.fr@gmail.com',
+                    from: 'enguyen.fr@gmail.com',
+                    replyTo: 'enguyen.fr@gmail.com',
                     mimeType: 'text/html'
                 )
             }
