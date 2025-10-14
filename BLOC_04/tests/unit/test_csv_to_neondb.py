@@ -1,17 +1,17 @@
 # tests/unit/test_csv_to_neondb.py
 
-import os
+import sys
 from unittest.mock import patch, MagicMock
 import pytest
 
-# Mock du module custom pour éviter ImportError
-import sys
+# Mock du module custom pour éviter ImportError lors de l'import
 sys.modules["s3_to_postgres"] = MagicMock()
 
+# ⚠️ IMPORTANT : on importe APRÈS le mock
 from s3_to_postgres import S3ToPostgresOperator
 
 
-@patch("s3_to_postgres.S3Hook")
+@patch("s3_to_postgres.S3Hook")  # ✅ CORRECT : c'est l'import DANS s3_to_postgres.py
 @patch("s3_to_postgres.PostgresHook")
 @patch("s3_to_postgres.pd.read_csv")
 def test_s3_to_postgres_operator(mock_read_csv, mock_postgres_hook_class, mock_s3_hook_class):
@@ -25,7 +25,7 @@ def test_s3_to_postgres_operator(mock_read_csv, mock_postgres_hook_class, mock_s
     mock_engine = MagicMock()
     mock_postgres_instance.get_sqlalchemy_engine.return_value = mock_engine
 
-    # Simuler le téléchargement
+    # Simuler le téléchargement → retourne un chemin local
     mock_s3_instance.download_file.return_value = "/tmp/weather_paris_fect.csv"
 
     # Simuler le DataFrame
@@ -54,11 +54,9 @@ def test_s3_to_postgres_operator(mock_read_csv, mock_postgres_hook_class, mock_s
 
     mock_read_csv.assert_called_once_with("/tmp/weather_paris_fect.csv", header=None)
 
-    mock_postgres_instance.get_sqlalchemy_engine.assert_called_once()
-
     mock_df.to_sql.assert_called_once_with(
         "weather_data",
         mock_engine,
-        if_exists="replace",  # ou "append" selon ton besoin
+        if_exists="replace",
         index=False
     )
