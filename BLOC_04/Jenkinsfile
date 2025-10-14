@@ -44,8 +44,6 @@ pipeline {
             steps {
                 dir("${WORK_DIR}") {
                     sh '''
-                        # Ajoute plugins/ au PYTHONPATH pour que Airflow trouve S3ToPostgresOperator
-                        export PYTHONPATH=$PYTHONPATH:$WORKSPACE/${WORK_DIR}/plugins
 
                         mkdir -p reports/integration
 
