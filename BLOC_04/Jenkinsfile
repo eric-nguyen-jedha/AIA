@@ -10,12 +10,14 @@ pipeline {
         REPORT_DIR = "reports"
         UNIT_REPORT = "${REPORT_DIR}/unit"
         INTEGRATION_REPORT = "${REPORT_DIR}/integration"
+        WORK_DIR = "AIA/BLOC_04"
     }
 
     stages {
         stage('Install dependencies') {
             steps {
                 sh '''
+                    cd ${WORK_DIR}
                     apt-get update && apt-get install -y --no-install-recommends gcc
                     pip install --upgrade pip
                     pip install -r requirements.txt
@@ -26,10 +28,11 @@ pipeline {
         stage('Run unit tests') {
             steps {
                 sh '''
-                    mkdir -p ${UNIT_REPORT}
+                    cd ${WORK_DIR}
+                    mkdir -p ${REPORT_DIR}/unit
                     pytest tests/unit \
-                        --junitxml=${UNIT_REPORT}/report.xml \
-                        --html=${UNIT_REPORT}/report.html \
+                        --junitxml=${REPORT_DIR}/unit/report.xml \
+                        --html=${REPORT_DIR}/unit/report.html \
                         --self-contained-html
                 '''
             }
@@ -38,10 +41,11 @@ pipeline {
         stage('Run integration tests') {
             steps {
                 sh '''
-                    mkdir -p ${INTEGRATION_REPORT}
+                    cd ${WORK_DIR}
+                    mkdir -p ${REPORT_DIR}/integration
                     pytest tests/integration \
-                        --junitxml=${INTEGRATION_REPORT}/report.xml \
-                        --html=${INTEGRATION_REPORT}/report.html \
+                        --junitxml=${REPORT_DIR}/integration/report.xml \
+                        --html=${REPORT_DIR}/integration/report.html \
                         --self-contained-html
                 '''
             }
@@ -49,14 +53,14 @@ pipeline {
 
         stage('Publish reports') {
             steps {
-                junit allowEmptyResults: true, testResults: "${REPORT_DIR}/**/report.xml"
+                junit allowEmptyResults: true, testResults: "${WORK_DIR}/${REPORT_DIR}/**/report.xml"
                 publishHTML(target: [
-                    reportDir: "${UNIT_REPORT}",
+                    reportDir: "${WORK_DIR}/${REPORT_DIR}/unit",
                     reportFiles: "report.html",
                     reportName: "Unit Tests"
                 ])
                 publishHTML(target: [
-                    reportDir: "${INTEGRATION_REPORT}",
+                    reportDir: "${WORK_DIR}/${REPORT_DIR}/integration",
                     reportFiles: "report.html",
                     reportName: "Integration Tests"
                 ])
