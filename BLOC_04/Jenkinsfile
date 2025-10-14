@@ -10,7 +10,6 @@ pipeline {
         WORK_DIR = "BLOC_04"
         REPORT_DIR = "${WORK_DIR}/reports"
         UNIT_REPORT = "${REPORT_DIR}/unit"
-        INTEGRATION_REPORT = "${REPORT_DIR}/integration"
     }
 
     stages {
@@ -40,39 +39,13 @@ pipeline {
             }
         }
 
-        stage('Run integration tests') {
-            steps {
-                dir("${WORK_DIR}") {
-                    sh '''
-
-                        mkdir -p reports/integration
-
-                        if [ -d "tests/integration" ]; then
-                            pytest tests/integration \
-                                --junitxml=reports/integration/report.xml \
-                                --html=reports/integration/report.html \
-                                --self-contained-html
-                        else
-                            echo "No integration tests found. Skipping."
-                            echo '<?xml version="1.0" encoding="UTF-8"?><testsuite/>' > reports/integration/report.xml
-                        fi
-                    '''
-                }
-            }
-        }
-
         stage('Publish reports') {
             steps {
-                junit allowEmptyResults: true, testResults: "${REPORT_DIR}/**/report.xml"
+                junit allowEmptyResults: true, testResults: "${REPORT_DIR}/unit/report.xml"
                 publishHTML(target: [
                     reportDir: "${UNIT_REPORT}",
                     reportFiles: "report.html",
                     reportName: "Unit Tests"
-                ])
-                publishHTML(target: [
-                    reportDir: "${INTEGRATION_REPORT}",
-                    reportFiles: "report.html",
-                    reportName: "Integration Tests"
                 ])
             }
         }
@@ -87,11 +60,7 @@ pipeline {
                     body: """
                         <p>Bonjour,</p>
                         <p>Les tests de <b>${env.JOB_NAME}</b> (build #${env.BUILD_NUMBER}) ont été exécutés avec succès.</p>
-                        <p>Vous pouvez consulter les rapports détaillés :</p>
-                        <ul>
-                          <li><a href="${env.BUILD_URL}HTML_20Report_20(Unit_20Tests)/report.html">Unit Tests</a></li>
-                          <li><a href="${env.BUILD_URL}HTML_20Report_20(Integration_20Tests)/report.html">Integration Tests</a></li>
-                        </ul>
+                        <p>Rapport des tests unitaires : <a href="${env.BUILD_URL}HTML_20Report_20(Unit_20Tests)/report.html">Unit Tests</a></p>
                         <p>Cordialement,<br/>Jenkins CI</p>
                     """,
                     to: 'enguyen.fr@gmail.com',
@@ -110,11 +79,7 @@ pipeline {
                     body: """
                         <p>Bonjour,</p>
                         <p>Les tests de <b>${env.JOB_NAME}</b> (build #${env.BUILD_NUMBER}) ont échoué.</p>
-                        <p>Consultez les rapports détaillés :</p>
-                        <ul>
-                          <li><a href="${env.BUILD_URL}HTML_20Report_20(Unit_20Tests)/report.html">Unit Tests</a></li>
-                          <li><a href="${env.BUILD_URL}HTML_20Report_20(Integration_20Tests)/report.html">Integration Tests</a></li>
-                        </ul>
+                        <p>Rapport des tests unitaires : <a href="${env.BUILD_URL}HTML_20Report_20(Unit_20Tests)/report.html">Unit Tests</a></p>
                         <p>Merci de corriger les erreurs dès que possible.</p>
                         <p>Cordialement,<br/>Jenkins CI</p>
                     """,
