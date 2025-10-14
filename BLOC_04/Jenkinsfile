@@ -7,57 +7,50 @@ pipeline {
     }
 
     environment {
-        REPORT_DIR = "reports"
+        WORK_DIR = "BLOC_04"
+        REPORT_DIR = "${WORK_DIR}/reports"
         UNIT_REPORT = "${REPORT_DIR}/unit"
         INTEGRATION_REPORT = "${REPORT_DIR}/integration"
-        WORK_DIR = "AIA/BLOC_04"
     }
 
     stages {
-        stage('Check workspace structure') {
-            steps {
-                sh '''
-                    echo "=== Current directory ==="
-                    pwd
-                    echo "=== Directory contents ==="
-                    ls -la
-                    echo "=== Looking for requirements.txt ==="
-                    find . -name "requirements.txt" -type f
-                '''
-            }
-        }
-
         stage('Install dependencies') {
             steps {
-                sh '''
-                    apt-get update && apt-get install -y --no-install-recommends gcc
-                    pip install --upgrade pip
-                    pip install -r requirements.txt
-                '''
+                dir("${WORK_DIR}") {
+                    sh '''
+                        apt-get update && apt-get install -y --no-install-recommends gcc
+                        pip install --upgrade pip
+                        pip install -r requirements.txt
+                    '''
+                }
             }
         }
 
         stage('Run unit tests') {
             steps {
-                sh '''
-                    mkdir -p ${UNIT_REPORT}
-                    pytest tests/unit \
-                        --junitxml=${UNIT_REPORT}/report.xml \
-                        --html=${UNIT_REPORT}/report.html \
-                        --self-contained-html
-                '''
+                dir("${WORK_DIR}") {
+                    sh '''
+                        mkdir -p reports/unit
+                        pytest tests/unit \
+                            --junitxml=reports/unit/report.xml \
+                            --html=reports/unit/report.html \
+                            --self-contained-html
+                    '''
+                }
             }
         }
 
         stage('Run integration tests') {
             steps {
-                sh '''
-                    mkdir -p ${INTEGRATION_REPORT}
-                    pytest tests/integration \
-                        --junitxml=${INTEGRATION_REPORT}/report.xml \
-                        --html=${INTEGRATION_REPORT}/report.html \
-                        --self-contained-html
-                '''
+                dir("${WORK_DIR}") {
+                    sh '''
+                        mkdir -p reports/integration
+                        pytest tests/integration \
+                            --junitxml=reports/integration/report.xml \
+                            --html=reports/integration/report.html \
+                            --self-contained-html
+                    '''
+                }
             }
         }
 
