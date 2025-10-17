@@ -235,8 +235,7 @@ pipeline {
             )
         }
     }
-    // ... (le reste du post reste identique)
-}        
+      
         failure {
             echo "❌ Some tests failed."
             script {
