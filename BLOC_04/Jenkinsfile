@@ -166,62 +166,77 @@ pipeline {
     }
     
     post {
-        success {
-            echo "✅ All tests passed!"
-            script {
-                // Compter les tests
-                def unitTests = 0
-                def mlTests = 0
-                def integrationTests = 0
-                
-                try {
-                    def unitXml = readFile("${REPORT_DIR}/unit/report.xml")
-                    unitTests = (unitXml =~ /tests="(\d+)"/).findAll().size()
-                } catch (Exception e) {}
-                
-                try {
-                    def mlXml = readFile("${REPORT_DIR}/ml/report.xml")
-                    mlTests = (mlXml =~ /tests="(\d+)"/).findAll().size()
-                } catch (Exception e) {}
-                
-                emailext(
-                    subject: "✅ Tests réussis - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                    body: """
-                        <html>
-                        <body>
-                            <h2>✅ Tests réussis</h2>
-                            <p><b>Projet</b> : ${env.JOB_NAME}</p>
-                            <p><b>Build</b> : #${env.BUILD_NUMBER}</p>
-                            
-                            <h3>📊 Résumé des tests</h3>
-                            <ul>
-                                <li>Tests unitaires - Data Pipeline : ${unitTests} tests</li>
-                                <li>Tests unitaires - ML Pipeline : ${mlTests} tests</li>
-                                <li>Tests d'intégration : ${integrationTests} tests</li>
-                            </ul>
-                            
-                            <h3>📄 Rapports</h3>
-                            <ul>
-                                <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
-                                <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20ML_20Pipeline/">Tests ML Pipeline</a></li>
-                                <li><a href="${env.BUILD_URL}Coverage_20Report_20-_20ML/">Couverture ML</a></li>
-                                <li><a href="${env.BUILD_URL}Integration_20Tests_20-_20ML/">Tests Intégration</a></li>
-                            </ul>
-                            
-                            <p><i>Tous les tests ont été exécutés avec succès ! 🎉</i></p>
-                            
-                            <p>Cordialement,<br/>Jenkins CI</p>
-                        </body>
-                        </html>
-                    """,
-                    to: 'enguyen.fr@gmail.com',
-                    from: 'enguyen.fr@gmail.com',
-                    replyTo: 'enguyen.fr@gmail.com',
-                    mimeType: 'text/html'
-                )
+    success {
+        echo "✅ All tests passed!"
+        script {
+            def unitTests = 0
+            def mlTests = 0
+            def integrationTests = 0
+
+            // Extraire le nombre de tests depuis les rapports JUnit
+            try {
+                def unitXml = readFile("${REPORT_DIR}/unit/report.xml")
+                def m = unitXml =~ /tests="(\d+)"/
+                if (m) unitTests = m[0][1] as Integer
+            } catch (Exception e) {
+                echo "⚠️ Impossible de lire unit/report.xml"
             }
+
+            try {
+                def mlXml = readFile("${REPORT_DIR}/ml/report.xml")
+                def m = mlXml =~ /tests="(\d+)"/
+                if (m) mlTests = m[0][1] as Integer
+            } catch (Exception e) {
+                echo "⚠️ Impossible de lire ml/report.xml"
+            }
+
+            try {
+                def integXml = readFile("${REPORT_DIR}/integration/report.xml")
+                def m = integXml =~ /tests="(\d+)"/
+                if (m) integrationTests = m[0][1] as Integer
+            } catch (Exception e) {
+                echo "⚠️ Impossible de lire integration/report.xml"
+            }
+
+            emailext(
+                subject: "✅ Tests réussis - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                    <html>
+                    <body>
+                        <h2>✅ Tests réussis</h2>
+                        <p><b>Projet</b> : ${env.JOB_NAME}</p>
+                        <p><b>Build</b> : #${env.BUILD_NUMBER}</p>
+                        
+                        <h3>📊 Résumé des tests</h3>
+                        <ul>
+                            <li>Tests unitaires - Data Pipeline : ${unitTests} tests</li>
+                            <li>Tests unitaires - ML Pipeline : ${mlTests} tests</li>
+                            <li>Tests d'intégration : ${integrationTests} tests</li>
+                        </ul>
+                        
+                        <h3>📄 Rapports</h3>
+                        <ul>
+                            <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
+                            <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20ML_20Pipeline/">Tests ML Pipeline</a></li>
+                            <li><a href="${env.BUILD_URL}Coverage_20Report_20-_20ML/">Couverture ML</a></li>
+                            <li><a href="${env.BUILD_URL}Integration_20Tests_20-_20ML/">Tests Intégration</a></li>
+                        </ul>
+                        
+                        <p><i>Tous les tests ont été exécutés avec succès ! 🎉</i></p>
+                        
+                        <p>Cordialement,<br/>Jenkins CI</p>
+                    </body>
+                    </html>
+                """,
+                to: 'enguyen.fr@gmail.com',
+                from: 'enguyen.fr@gmail.com',
+                replyTo: 'enguyen.fr@gmail.com',
+                mimeType: 'text/html'
+            )
         }
-        
+    }
+    // ... (le reste du post reste identique)
+}        
         failure {
             echo "❌ Some tests failed."
             script {
