@@ -163,19 +163,6 @@ pipeline {
                 ])
             }
         }
-
-        // 🔹 Copie des rapports pour lecture dans post{}
-        stage('Collect Reports for Email') {
-            steps {
-                sh '''
-                    echo "📦 Copie des rapports vers le workspace principal..."
-                    mkdir -p collected_reports/unit collected_reports/ml collected_reports/integration
-                    cp -r ${WORK_DIR}/reports/unit/report.xml collected_reports/unit/ 2>/dev/null || true
-                    cp -r ${WORK_DIR}/reports/ml/report.xml collected_reports/ml/ 2>/dev/null || true
-                    cp -r ${WORK_DIR}/reports/integration/report.xml collected_reports/integration/ 2>/dev/null || true
-                '''
-            }
-        }
     }
     
     post {
@@ -187,45 +174,48 @@ pipeline {
                 def integrationTests = 0
 
                 try {
-                    if (fileExists("collected_reports/unit/report.xml")) {
-                        def unitXml = readFile("collected_reports/unit/report.xml")
+                    def unitPath = "${WORK_DIR}/reports/unit/report.xml"
+                    if (fileExists(unitPath)) {
+                        def unitXml = readFile(unitPath)
                         def matcher = (unitXml =~ /<testsuite[^>]*tests="(\d+)"/)
                         matcher.each { match ->
                             unitTests += match[1] as Integer
                         }
                         echo "Unit tests found: ${unitTests}"
                     } else {
-                        echo "⚠️ No unit XML found"
+                        echo "⚠️ No unit XML found at ${unitPath}"
                     }
                 } catch (Exception e) {
                     echo "⚠️ Failed to read unit report: ${e.message}"
                 }
 
                 try {
-                    if (fileExists("collected_reports/ml/report.xml")) {
-                        def mlXml = readFile("collected_reports/ml/report.xml")
+                    def mlPath = "${WORK_DIR}/reports/ml/report.xml"
+                    if (fileExists(mlPath)) {
+                        def mlXml = readFile(mlPath)
                         def matcher = (mlXml =~ /<testsuite[^>]*tests="(\d+)"/)
                         matcher.each { match ->
                             mlTests += match[1] as Integer
                         }
                         echo "ML tests found: ${mlTests}"
                     } else {
-                        echo "⚠️ No ML XML found"
+                        echo "⚠️ No ML XML found at ${mlPath}"
                     }
                 } catch (Exception e) {
                     echo "⚠️ Failed to read ML report: ${e.message}"
                 }
 
                 try {
-                    if (fileExists("collected_reports/integration/report.xml")) {
-                        def integXml = readFile("collected_reports/integration/report.xml")
+                    def integPath = "${WORK_DIR}/reports/integration/report.xml"
+                    if (fileExists(integPath)) {
+                        def integXml = readFile(integPath)
                         def matcher = (integXml =~ /<testsuite[^>]*tests="(\d+)"/)
                         matcher.each { match ->
                             integrationTests += match[1] as Integer
                         }
                         echo "Integration tests found: ${integrationTests}"
                     } else {
-                        echo "⚠️ No integration XML found"
+                        echo "⚠️ No integration XML found at ${integPath}"
                     }
                 } catch (Exception e) {
                     echo "⚠️ Failed to read integration report: ${e.message}"
