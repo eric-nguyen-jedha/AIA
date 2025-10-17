@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 # Ajouter le répertoire des DAGs au path
-dags_dir = Path(__file__).parent.parent / 'dags'
+dags_dir = Path(__file__).parent.parent / 'dags_ml'
 sys.path.insert(0, str(dags_dir))
 
 def validate_dag_file(dag_file):
