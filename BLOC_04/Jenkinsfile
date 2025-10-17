@@ -233,8 +233,7 @@ pipeline {
             )
         }
     }
-    // ... (failure et always inchangés)
-}
+
       
         failure {
             echo "❌ Some tests failed."
