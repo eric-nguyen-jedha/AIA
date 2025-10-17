@@ -173,29 +173,37 @@ pipeline {
             def mlTests = 0
             def integrationTests = 0
 
-            // Extraire le nombre de tests depuis les rapports JUnit
             try {
-                def unitXml = readFile("${REPORT_DIR}/unit/report.xml")
-                def m = unitXml =~ /tests="(\d+)"/
-                if (m) unitTests = m[0][1] as Integer
+                def unitXml = readFile("BLOC_04/reports/unit/report.xml")
+                def matcher = unitXml =~ /<testsuite[^>]*tests="(\d+)"/
+                if (matcher) {
+                    unitTests = matcher[0][1] as Integer
+                }
+                echo "Unit tests found: ${unitTests}"
             } catch (Exception e) {
-                echo "⚠️ Impossible de lire unit/report.xml"
+                echo "⚠️ Failed to read unit report: ${e.message}"
             }
 
             try {
-                def mlXml = readFile("${REPORT_DIR}/ml/report.xml")
-                def m = mlXml =~ /tests="(\d+)"/
-                if (m) mlTests = m[0][1] as Integer
+                def mlXml = readFile("BLOC_04/reports/ml/report.xml")
+                def matcher = mlXml =~ /<testsuite[^>]*tests="(\d+)"/
+                if (matcher) {
+                    mlTests = matcher[0][1] as Integer
+                }
+                echo "ML tests found: ${mlTests}"
             } catch (Exception e) {
-                echo "⚠️ Impossible de lire ml/report.xml"
+                echo "⚠️ Failed to read ML report: ${e.message}"
             }
 
             try {
-                def integXml = readFile("${REPORT_DIR}/integration/report.xml")
-                def m = integXml =~ /tests="(\d+)"/
-                if (m) integrationTests = m[0][1] as Integer
+                def integXml = readFile("BLOC_04/reports/integration/report.xml")
+                def matcher = integXml =~ /<testsuite[^>]*tests="(\d+)"/
+                if (matcher) {
+                    integrationTests = matcher[0][1] as Integer
+                }
+                echo "Integration tests found: ${integrationTests}"
             } catch (Exception e) {
-                echo "⚠️ Impossible de lire integration/report.xml"
+                echo "⚠️ Failed to read integration report: ${e.message}"
             }
 
             emailext(
@@ -214,16 +222,6 @@ pipeline {
                             <li>Tests d'intégration : ${integrationTests} tests</li>
                         </ul>
                         
-                        <h3>📄 Rapports</h3>
-                        <ul>
-                            <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
-                            <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20ML_20Pipeline/">Tests ML Pipeline</a></li>
-                            <li><a href="${env.BUILD_URL}Coverage_20Report_20-_20ML/">Couverture ML</a></li>
-                            <li><a href="${env.BUILD_URL}Integration_20Tests_20-_20ML/">Tests Intégration</a></li>
-                        </ul>
-                        
-                        <p><i>Tous les tests ont été exécutés avec succès ! 🎉</i></p>
-                        
                         <p>Cordialement,<br/>Jenkins CI</p>
                     </body>
                     </html>
@@ -235,6 +233,8 @@ pipeline {
             )
         }
     }
+    // ... (failure et always inchangés)
+}
       
         failure {
             echo "❌ Some tests failed."
