@@ -1,64 +1,59 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Script de validation des DAGs Airflow — version robuste pour CI/CD
+Script de validation des DAGs Airflow — version stable pour CI/CD
 """
 
 import sys
-import os
 from pathlib import Path
 from unittest.mock import MagicMock
 
 # =============================================================================
-# 🛡️ MOCK COMPLET D'AIRFLOW (doit être en TOUT PREMIER)
+# 🛡️ MOCK COMPLET ET SIMPLE D'AIRFLOW (basé sur conftest.py)
 # =============================================================================
-# Simule tout le package airflow comme un module vide mais importable
-class MockAirflowModule:
-    def __init__(self, name):
-        self.__name__ = name
-        self.__path__ = []
-        self.__file__ = f"<mocked {name}>"
+# Liste exhaustive des modules Airflow utilisés dans les DAGs
+modules_to_mock = [
+    "airflow",
+    "airflow.models",
+    "airflow.models.Variable",
+    "airflow.models.dag",
+    "airflow.models.dagbag",
+    "airflow.operators",
+    "airflow.operators.python",
+    "airflow.providers",
+    "airflow.providers.amazon",
+    "airflow.providers.amazon.aws",
+    "airflow.providers.amazon.aws.hooks",
+    "airflow.providers.amazon.aws.hooks.s3",
+    "airflow.providers.postgres",
+    "airflow.providers.postgres.hooks",
+    "airflow.providers.postgres.hooks.postgres",
+    "airflow.exceptions",
+    "airflow.utils",
+    "airflow.utils.dates",
+]
 
-    def __getattr__(self, name):
-        # Crée des sous-modules à la volée (ex: airflow.operators, airflow.models, etc.)
-        fullname = f"{self.__name__}.{name}"
-        mod = MockAirflowModule(fullname)
-        sys.modules[fullname] = mod
-        return mod
-
-# Remplace le module 'airflow' par un mock dynamique
-sys.modules["airflow"] = MockAirflowModule("airflow")
-
-# Mock aussi les modules courants utilisés dans les DAGs
-sys.modules["airflow.models"] = MagicMock()
-sys.modules["airflow.models.Variable"] = MagicMock()
-sys.modules["airflow.operators"] = MagicMock()
-sys.modules["airflow.operators.python"] = MagicMock()
-sys.modules["airflow.providers"] = MagicMock()
-sys.modules["airflow.providers.amazon"] = MagicMock()
-sys.modules["airflow.providers.amazon.aws"] = MagicMock()
-sys.modules["airflow.providers.amazon.aws.hooks"] = MagicMock()
-sys.modules["airflow.providers.amazon.aws.hooks.s3"] = MagicMock()
-sys.modules["airflow.providers.postgres"] = MagicMock()
-sys.modules["airflow.providers.postgres.hooks"] = MagicMock()
-sys.modules["airflow.providers.postgres.hooks.postgres"] = MagicMock()
+for mod_name in modules_to_mock:
+    sys.modules[mod_name] = MagicMock()
 
 # Mock plugin custom
 sys.modules["s3_to_postgres"] = MagicMock()
 
-# Mock Variable.get pour éviter les erreurs de "table variable"
+# Mock spécifique de Variable.get
 class MockVariable:
     @staticmethod
     def get(key, default_var=None):
-        return {
+        fake_vars = {
             "BUCKET": "test-bucket",
-            "AWS_ACCESS_KEY_ID": "fake",
-            "AWS_SECRET_ACCESS_KEY": "fake",
+            "AWS_ACCESS_KEY_ID": "fake_key",
+            "AWS_SECRET_ACCESS_KEY": "fake_secret",
             "AWS_DEFAULT_REGION": "eu-west-3",
-            "OPEN_WEATHER_API_KEY": "fake_key",
+            "OPEN_WEATHER_API_KEY": "fake_api_key",
             "mlflow_uri": "http://localhost:8081",
-        }.get(key, default_var or f"mock_value_for_{key}")
+        }
+        return fake_vars.get(key, default_var or f"mock_{key}")
 
+# Injecter dans le mock
 sys.modules["airflow.models.Variable"].Variable = MockVariable
 # =============================================================================
 
@@ -71,7 +66,7 @@ def validate_dag_file(dag_path):
         module_name = dag_path.stem
         spec = importlib.util.spec_from_file_location(module_name, str(dag_path))
         if spec is None:
-            print(f"  ❌ Impossible de charger le module")
+            print("  ❌ Impossible de charger le module")
             return False
 
         module = importlib.util.module_from_spec(spec)
@@ -86,7 +81,7 @@ def validate_dag_file(dag_path):
         ]
 
         if not dags_found:
-            print(f"  ⚠️  Aucun DAG trouvé")
+            print("  ⚠️  Aucun DAG trouvé")
             return False
 
         print(f"  ✅ DAGs trouvés: {', '.join(dags_found)}")
