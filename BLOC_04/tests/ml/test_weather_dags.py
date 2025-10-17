@@ -19,6 +19,51 @@ import json
 import sys
 sys.path.insert(0, '/opt/airflow/dags')
 
+# =============================================================================
+# 🛡️ MOCK D'AIRFLOW POUR FONCTIONNER HORS ENVIRONNEMENT AIRFLOW (ex: Jenkins)
+# =============================================================================
+import sys
+from unittest.mock import MagicMock
+
+_airflow_modules = [
+    "airflow",
+    "airflow.models",
+    "airflow.models.Variable",
+    "airflow.exceptions",
+    "airflow.operators",
+    "airflow.operators.python",
+    "airflow.providers",
+    "airflow.providers.amazon",
+    "airflow.providers.amazon.aws",
+    "airflow.providers.amazon.aws.hooks",
+    "airflow.providers.amazon.aws.hooks.s3",
+    "airflow.providers.postgres",
+    "airflow.providers.postgres.hooks",
+    "airflow.providers.postgres.hooks.postgres",
+]
+
+for mod in _airflow_modules:
+    sys.modules[mod] = MagicMock()
+
+# Mock plugin custom si utilisé
+sys.modules["s3_to_postgres"] = MagicMock()
+
+# Mock Variable.get pour éviter les erreurs de base de données
+class MockVariable:
+    @staticmethod
+    def get(key, default_var=None):
+        return {
+            "BUCKET": "test-bucket",
+            "AWS_ACCESS_KEY_ID": "fake",
+            "AWS_SECRET_ACCESS_KEY": "fake",
+            "AWS_DEFAULT_REGION": "eu-west-3",
+            "OPEN_WEATHER_API_KEY": "fake_key",
+            "mlflow_uri": "http://localhost:8081",
+        }.get(key, default_var or f"mock_{key}")
+
+sys.modules["airflow.models.Variable"].Variable = MockVariable
+# =============================================================================
+
 from realtime_prediction_forecast import (
     preprocess_weather_json,
     WEATHER_CODE_MAPPING
