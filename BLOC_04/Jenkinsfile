@@ -173,52 +173,61 @@ pipeline {
                 def mlTests = 0
                 def integrationTests = 0
 
-                try {
-                    def unitPath = "${WORK_DIR}/reports/unit/report.xml"
-                    if (fileExists(unitPath)) {
-                        def unitXml = readFile(unitPath)
-                        def matcher = (unitXml =~ /<testsuite[^>]*tests="(\d+)"/)
-                        matcher.each { match ->
-                            unitTests += match[1] as Integer
-                        }
-                        echo "Unit tests found: ${unitTests}"
-                    } else {
-                        echo "⚠️ No unit XML found at ${unitPath}"
-                    }
-                } catch (Exception e) {
-                    echo "⚠️ Failed to read unit report: ${e.message}"
+                dir("${WORK_DIR}") {
+                    sh '''
+                        echo "=== Debug: listing reports dirs ==="
+                        ls -la reports/ || echo "reports dir not found"
+                        ls -la reports/unit/ || echo "unit dir empty or missing"
+                        ls -la reports/ml/ || echo "ml dir empty or missing"
+                        ls -la reports/integration/ || echo "integration dir empty or missing"
+                    '''
                 }
 
-                try {
-                    def mlPath = "${WORK_DIR}/reports/ml/report.xml"
-                    if (fileExists(mlPath)) {
-                        def mlXml = readFile(mlPath)
-                        def matcher = (mlXml =~ /<testsuite[^>]*tests="(\d+)"/)
-                        matcher.each { match ->
-                            mlTests += match[1] as Integer
+                dir("${WORK_DIR}") {
+                    try {
+                        if (fileExists("reports/unit/report.xml")) {
+                            def unitXml = readFile("reports/unit/report.xml")
+                            def matcher = (unitXml =~ /<testsuite[^>]*tests="(\d+)"/)
+                            matcher.each { match ->
+                                unitTests += match[1] as Integer
+                            }
+                            echo "Unit tests found: ${unitTests}"
+                        } else {
+                            echo "⚠️ No unit XML found inside ${WORK_DIR}"
                         }
-                        echo "ML tests found: ${mlTests}"
-                    } else {
-                        echo "⚠️ No ML XML found at ${mlPath}"
+                    } catch (Exception e) {
+                        echo "⚠️ Failed to read unit report: ${e.message}"
                     }
-                } catch (Exception e) {
-                    echo "⚠️ Failed to read ML report: ${e.message}"
-                }
 
-                try {
-                    def integPath = "${WORK_DIR}/reports/integration/report.xml"
-                    if (fileExists(integPath)) {
-                        def integXml = readFile(integPath)
-                        def matcher = (integXml =~ /<testsuite[^>]*tests="(\d+)"/)
-                        matcher.each { match ->
-                            integrationTests += match[1] as Integer
+                    try {
+                        if (fileExists("reports/ml/report.xml")) {
+                            def mlXml = readFile("reports/ml/report.xml")
+                            def matcher = (mlXml =~ /<testsuite[^>]*tests="(\d+)"/)
+                            matcher.each { match ->
+                                mlTests += match[1] as Integer
+                            }
+                            echo "ML tests found: ${mlTests}"
+                        } else {
+                            echo "⚠️ No ML XML found inside ${WORK_DIR}"
                         }
-                        echo "Integration tests found: ${integrationTests}"
-                    } else {
-                        echo "⚠️ No integration XML found at ${integPath}"
+                    } catch (Exception e) {
+                        echo "⚠️ Failed to read ML report: ${e.message}"
                     }
-                } catch (Exception e) {
-                    echo "⚠️ Failed to read integration report: ${e.message}"
+
+                    try {
+                        if (fileExists("reports/integration/report.xml")) {
+                            def integXml = readFile("reports/integration/report.xml")
+                            def matcher = (integXml =~ /<testsuite[^>]*tests="(\d+)"/)
+                            matcher.each { match ->
+                                integrationTests += match[1] as Integer
+                            }
+                            echo "Integration tests found: ${integrationTests}"
+                        } else {
+                            echo "⚠️ No integration XML found inside ${WORK_DIR}"
+                        }
+                    } catch (Exception e) {
+                        echo "⚠️ Failed to read integration report: ${e.message}"
+                    }
                 }
 
                 emailext(
