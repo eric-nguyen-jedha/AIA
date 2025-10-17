@@ -11,6 +11,7 @@ import pickle
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 from sklearn.preprocessing import LabelEncoder
+import os
 
 # ============================================================================
 # TESTS UNITAIRES - Préparation des données historiques
