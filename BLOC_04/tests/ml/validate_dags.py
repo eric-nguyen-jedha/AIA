@@ -81,16 +81,52 @@ class MockDAG:
 sys.modules["airflow"].DAG = MockDAG
 sys.modules["airflow.models"].DAG = MockDAG
 
-# Mock de PythonOperator
+# Mock de PythonOperator avec support de l'opérateur >>
 class MockPythonOperator:
     def __init__(self, *args, **kwargs):
         self.task_id = kwargs.get('task_id', 'mock_task')
         self.python_callable = kwargs.get('python_callable')
         self.dag = kwargs.get('dag')
+    
+    def __rshift__(self, other):
+        """Support de l'opérateur >> pour les dépendances"""
+        return other
+    
+    def __lshift__(self, other):
+        """Support de l'opérateur << pour les dépendances"""
+        return self
+    
+    def set_upstream(self, other):
+        """Méthode alternative pour définir les dépendances"""
+        pass
+    
+    def set_downstream(self, other):
+        """Méthode alternative pour définir les dépendances"""
+        pass
 
+# Appliquer le mock à tous les imports possibles de PythonOperator
 sys.modules["airflow.operators.python"].PythonOperator = MockPythonOperator
-if "airflow.providers.standard.operators.python" in sys.modules:
+if "airflow.providers.standard" in sys.modules:
+    if "airflow.providers.standard.operators" not in sys.modules:
+        sys.modules["airflow.providers.standard.operators"] = MagicMock()
+    if "airflow.providers.standard.operators.python" not in sys.modules:
+        sys.modules["airflow.providers.standard.operators.python"] = MagicMock()
     sys.modules["airflow.providers.standard.operators.python"].PythonOperator = MockPythonOperator
+
+# Mock d'autres opérateurs si nécessaires
+class MockBaseOperator:
+    def __init__(self, *args, **kwargs):
+        self.task_id = kwargs.get('task_id', 'mock_task')
+        self.dag = kwargs.get('dag')
+    
+    def __rshift__(self, other):
+        return other
+    
+    def __lshift__(self, other):
+        return self
+
+if "airflow.models.baseoperator" in sys.modules:
+    sys.modules["airflow.models.baseoperator"].BaseOperator = MockBaseOperator
 
 # =============================================================================
 # Fonction de validation
