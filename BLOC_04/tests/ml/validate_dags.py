@@ -2,32 +2,33 @@
 # -*- coding: utf-8 -*-
 """
 Script de validation des DAGs Airflow — version stable pour CI/CD
+Vérifie que les DAGs ML peuvent être importés sans erreur
 """
-
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
 # =============================================================================
-# 🛡️ MOCK COMPLET ET SIMPLE D'AIRFLOW (basé sur conftest.py)
+# 🛡️ MOCK COMPLET D'AIRFLOW
 # =============================================================================
-# Liste exhaustive des modules Airflow utilisés dans les DAGs
+
+# Liste des modules Airflow à mocker
 modules_to_mock = [
     "airflow",
     "airflow.models",
     "airflow.models.Variable",
-#    "airflow.models.dag",
-    "airflow.models.dagbag",
+    "airflow.models.dag",
+    "airflow.models.baseoperator",
     "airflow.operators",
     "airflow.operators.python",
     "airflow.providers",
+    "airflow.providers.standard",
+    "airflow.providers.standard.operators",
+    "airflow.providers.standard.operators.python",
     "airflow.providers.amazon",
     "airflow.providers.amazon.aws",
     "airflow.providers.amazon.aws.hooks",
     "airflow.providers.amazon.aws.hooks.s3",
-    "airflow.providers.postgres",
-    "airflow.providers.postgres.hooks",
-    "airflow.providers.postgres.hooks.postgres",
     "airflow.exceptions",
     "airflow.utils",
     "airflow.utils.dates",
@@ -36,8 +37,12 @@ modules_to_mock = [
 for mod_name in modules_to_mock:
     sys.modules[mod_name] = MagicMock()
 
-# Mock plugin custom
-sys.modules["s3_to_postgres"] = MagicMock()
+# Mock des dépendances externes
+sys.modules["mlflow"] = MagicMock()
+sys.modules["mlflow.pyfunc"] = MagicMock()
+sys.modules["mlflow.xgboost"] = MagicMock()
+sys.modules["mlflow.tracking"] = MagicMock()
+sys.modules["boto3"] = MagicMock()
 
 # Mock spécifique de Variable.get
 class MockVariable:
@@ -50,83 +55,166 @@ class MockVariable:
             "AWS_DEFAULT_REGION": "eu-west-3",
             "OPEN_WEATHER_API_KEY": "fake_api_key",
             "mlflow_uri": "http://localhost:8081",
+            "ARTIFACT_STORE_URI": "s3://test-bucket/mlflow"
         }
         return fake_vars.get(key, default_var or f"mock_{key}")
 
-# Injecter dans le mock
-sys.modules["airflow.models.Variable"].Variable = MockVariable
+# Injecter le mock de Variable
+sys.modules["airflow.models"].Variable = MockVariable
+
+# Mock de DAG avec un attribut dag_id pour la détection
+class MockDAG:
+    def __init__(self, dag_id, *args, **kwargs):
+        self.dag_id = dag_id
+        self.default_args = kwargs.get('default_args', {})
+        self.description = kwargs.get('description', '')
+        self.schedule = kwargs.get('schedule', None)
+        self.catchup = kwargs.get('catchup', False)
+        self.tags = kwargs.get('tags', [])
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, *args):
+        pass
+
+sys.modules["airflow"].DAG = MockDAG
+sys.modules["airflow.models"].DAG = MockDAG
+
+# Mock de PythonOperator
+class MockPythonOperator:
+    def __init__(self, *args, **kwargs):
+        self.task_id = kwargs.get('task_id', 'mock_task')
+        self.python_callable = kwargs.get('python_callable')
+        self.dag = kwargs.get('dag')
+
+sys.modules["airflow.operators.python"].PythonOperator = MockPythonOperator
+if "airflow.providers.standard.operators.python" in sys.modules:
+    sys.modules["airflow.providers.standard.operators.python"].PythonOperator = MockPythonOperator
+
+# =============================================================================
+# Fonction de validation
 # =============================================================================
 
-# Imports après le mocking
 import importlib.util
 
 def validate_dag_file(dag_path):
+    """Valider un fichier DAG individuel"""
     print(f"📄 Validation de {dag_path.name}...")
+    
     try:
+        # Charger le module
         module_name = dag_path.stem
         spec = importlib.util.spec_from_file_location(module_name, str(dag_path))
+        
         if spec is None:
-            print("  ❌ Impossible de charger le module")
+            print("  ❌ Impossible de créer la spec du module")
             return False
-
+        
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
+        
+        # Exécuter le module
         spec.loader.exec_module(module)
-
-        # Vérifier la présence d'au moins un DAG
-        from airflow.models import DAG
-        dags_found = [
-            attr.dag_id for attr_name in dir(module)
-            if isinstance(getattr(module, attr_name), DAG)
-        ]
-
+        
+        # Chercher les DAGs dans le module
+        dags_found = []
+        for attr_name in dir(module):
+            attr = getattr(module, attr_name)
+            # Vérifier si c'est un MockDAG ou un objet avec dag_id
+            if isinstance(attr, MockDAG) or (hasattr(attr, 'dag_id') and hasattr(attr, 'default_args')):
+                dags_found.append(attr.dag_id)
+        
         if not dags_found:
-            print("  ⚠️  Aucun DAG trouvé")
+            print("  ⚠️  Aucun DAG trouvé dans le module")
             return False
-
+        
         print(f"  ✅ DAGs trouvés: {', '.join(dags_found)}")
         return True
-
+        
+    except SyntaxError as e:
+        print(f"  ❌ Erreur de syntaxe: {e}")
+        return False
+    except ImportError as e:
+        print(f"  ❌ Erreur d'import: {e}")
+        return False
     except Exception as e:
-        print(f"  ❌ Erreur: {e}")
+        print(f"  ❌ Erreur lors de la validation: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
 def main():
-    # Chemin pour BLOC_04/tests/ml/validate_dags.py
-    dags_dir = Path(__file__).parent.parent.parent / "dags_ml"
-
+    """Valider tous les DAGs ML"""
+    
+    # Déterminer le chemin des DAGs
+    # Si exécuté depuis BLOC_04/tests/ml/validate_dags.py
+    script_dir = Path(__file__).parent
+    
+    # Essayer plusieurs chemins possibles
+    possible_paths = [
+        script_dir.parent.parent / "dags_ml",  # BLOC_04/dags_ml
+        script_dir.parent.parent / "dags",      # BLOC_04/dags (si même répertoire)
+        Path.cwd() / "dags_ml",                 # Si exécuté depuis BLOC_04
+    ]
+    
+    dags_dir = None
+    for path in possible_paths:
+        if path.exists():
+            dags_dir = path
+            break
+    
+    if dags_dir is None:
+        print("❌ Impossible de trouver le répertoire dags_ml/")
+        print(f"   Chemins testés: {[str(p) for p in possible_paths]}")
+        sys.exit(1)
+    
     print("=" * 60)
-    print("🔍 VALIDATION DES DAGS AIRFLOW")
+    print("🔍 VALIDATION DES DAGS AIRFLOW ML")
     print("=" * 60)
-
+    print(f"📂 Répertoire: {dags_dir}")
+    print()
+    
+    # Liste des DAGs à valider
     dags_to_validate = [
         "realtime_prediction_forecast.py",
         "paris_meteo_ml_pipeline.py"
     ]
-
+    
     results = {}
     for filename in dags_to_validate:
         dag_path = dags_dir / filename
+        
         if not dag_path.exists():
             print(f"❌ Fichier non trouvé: {filename}")
+            print(f"   Chemin complet: {dag_path}")
             results[filename] = False
             continue
-
+        
         results[filename] = validate_dag_file(dag_path)
         print()
-
+    
+    # Résumé
     print("=" * 60)
     print("📊 RÉSUMÉ")
     print("=" * 60)
+    
     total = len(results)
     passed = sum(results.values())
     failed = total - passed
+    
     print(f"Total: {total}")
     print(f"✅ Réussis: {passed}")
     print(f"❌ Échoués: {failed}")
-
-    sys.exit(1 if failed > 0 else 0)
+    print()
+    
+    if failed > 0:
+        print("❌ La validation a échoué!")
+        sys.exit(1)
+    else:
+        print("✅ Tous les DAGs sont valides!")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
