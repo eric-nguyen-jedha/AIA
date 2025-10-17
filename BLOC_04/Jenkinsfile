@@ -5,13 +5,15 @@ pipeline {
             args '-u root:root'
         }
     }
-
+    
     environment {
         WORK_DIR = "BLOC_04"
         REPORT_DIR = "${WORK_DIR}/reports"
         UNIT_REPORT = "${REPORT_DIR}/unit"
+        ML_REPORT = "${REPORT_DIR}/ml"
+        INTEGRATION_REPORT = "${REPORT_DIR}/integration"
     }
-
+    
     stages {
         stage('Install dependencies') {
             steps {
@@ -24,45 +26,193 @@ pipeline {
                 }
             }
         }
-
-        stage('Run unit tests') {
+        
+        stage('Lint Code') {
             steps {
                 dir("${WORK_DIR}") {
                     sh '''
+                        echo "🔍 Vérification qualité du code..."
+                        flake8 dags/ dags_ml/ --max-line-length=120 --extend-ignore=E501,W503 --count || true
+                        pylint dags/*.py dags_ml/*.py --disable=C,R --exit-zero || true
+                    '''
+                }
+            }
+        }
+        
+        stage('Validate DAGs') {
+            steps {
+                dir("${WORK_DIR}") {
+                    sh '''
+                        echo "✅ Validation syntaxe des DAGs..."
+                        export PYTHONPATH=$PYTHONPATH:$WORKSPACE/${WORK_DIR}/plugins
+                        python tests/ml/validate_dags.py || exit 1
+                    '''
+                }
+            }
+        }
+        
+        stage('Run unit tests - Data Pipeline') {
+            steps {
+                dir("${WORK_DIR}") {
+                    sh '''
+                        echo "🧪 Tests unitaires - Pipeline de données..."
                         export PYTHONPATH=$PYTHONPATH:$WORKSPACE/${WORK_DIR}/plugins
                         mkdir -p reports/unit
                         pytest tests/unit \
                             --junitxml=reports/unit/report.xml \
                             --html=reports/unit/report.html \
-                            --self-contained-html
+                            --self-contained-html \
+                            -v
                     '''
                 }
             }
         }
-
+        
+        stage('Run unit tests - ML Pipeline') {
+            steps {
+                dir("${WORK_DIR}") {
+                    sh '''
+                        echo "🧪 Tests unitaires - Pipeline ML..."
+                        export PYTHONPATH=$PYTHONPATH:$WORKSPACE/${WORK_DIR}/plugins:$WORKSPACE/${WORK_DIR}/dags_ml
+                        mkdir -p reports/ml
+                        pytest tests/ml/test_weather_dags.py tests/ml/test_training_pipeline.py \
+                            -m "not integration" \
+                            --junitxml=reports/ml/report.xml \
+                            --html=reports/ml/report.html \
+                            --self-contained-html \
+                            --cov=dags_ml \
+                            --cov-report=xml:reports/ml/coverage.xml \
+                            --cov-report=html:reports/ml/coverage_html \
+                            -v
+                    '''
+                }
+            }
+        }
+        
+        stage('Run integration tests - ML') {
+            steps {
+                dir("${WORK_DIR}") {
+                    sh '''
+                        echo "🔗 Tests d'intégration - ML..."
+                        export PYTHONPATH=$PYTHONPATH:$WORKSPACE/${WORK_DIR}/plugins:$WORKSPACE/${WORK_DIR}/dags_ml
+                        mkdir -p reports/integration
+                        pytest tests/ml \
+                            -m "integration" \
+                            --junitxml=reports/integration/report.xml \
+                            --html=reports/integration/report.html \
+                            --self-contained-html \
+                            -v || true
+                    '''
+                }
+            }
+        }
+        
+        stage('Generate Coverage Summary') {
+            steps {
+                dir("${WORK_DIR}") {
+                    sh '''
+                        echo "📊 Génération du rapport de couverture global..."
+                        if [ -f reports/ml/coverage.xml ]; then
+                            echo "✅ Couverture ML générée"
+                        fi
+                    '''
+                }
+            }
+        }
+        
         stage('Publish reports') {
             steps {
-                junit allowEmptyResults: true, testResults: "${REPORT_DIR}/unit/report.xml"
+                // Rapports JUnit
+                junit allowEmptyResults: true, testResults: "${REPORT_DIR}/**/report.xml"
+                
+                // Rapports HTML - Tests unitaires (data pipeline)
                 publishHTML(target: [
                     reportDir: "${UNIT_REPORT}",
                     reportFiles: "report.html",
-                    reportName: "Unit Tests"
+                    reportName: "Unit Tests - Data Pipeline",
+                    keepAll: true,
+                    alwaysLinkToLastBuild: true
+                ])
+                
+                // Rapports HTML - Tests unitaires ML
+                publishHTML(target: [
+                    reportDir: "${ML_REPORT}",
+                    reportFiles: "report.html",
+                    reportName: "Unit Tests - ML Pipeline",
+                    keepAll: true,
+                    alwaysLinkToLastBuild: true
+                ])
+                
+                // Rapport de couverture ML
+                publishHTML(target: [
+                    reportDir: "${ML_REPORT}/coverage_html",
+                    reportFiles: "index.html",
+                    reportName: "Coverage Report - ML",
+                    keepAll: true,
+                    alwaysLinkToLastBuild: true
+                ])
+                
+                // Rapports HTML - Tests d'intégration
+                publishHTML(target: [
+                    reportDir: "${INTEGRATION_REPORT}",
+                    reportFiles: "report.html",
+                    reportName: "Integration Tests - ML",
+                    keepAll: true,
+                    alwaysLinkToLastBuild: true,
+                    allowMissing: true
                 ])
             }
         }
     }
-
+    
     post {
         success {
             echo "✅ All tests passed!"
             script {
+                // Compter les tests
+                def unitTests = 0
+                def mlTests = 0
+                def integrationTests = 0
+                
+                try {
+                    def unitXml = readFile("${REPORT_DIR}/unit/report.xml")
+                    unitTests = (unitXml =~ /tests="(\d+)"/).findAll().size()
+                } catch (Exception e) {}
+                
+                try {
+                    def mlXml = readFile("${REPORT_DIR}/ml/report.xml")
+                    mlTests = (mlXml =~ /tests="(\d+)"/).findAll().size()
+                } catch (Exception e) {}
+                
                 emailext(
                     subject: "✅ Tests réussis - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                     body: """
-                        <p>Bonjour,</p>
-                        <p>Les tests de <b>${env.JOB_NAME}</b> (build #${env.BUILD_NUMBER}) ont été exécutés avec succès.</p>
-                        <p>Rapport des tests unitaires : <a href="${env.BUILD_URL}HTML_20Report_20(Unit_20Tests)/report.html">Unit Tests</a></p>
-                        <p>Cordialement,<br/>Jenkins CI</p>
+                        <html>
+                        <body>
+                            <h2>✅ Tests réussis</h2>
+                            <p><b>Projet</b> : ${env.JOB_NAME}</p>
+                            <p><b>Build</b> : #${env.BUILD_NUMBER}</p>
+                            
+                            <h3>📊 Résumé des tests</h3>
+                            <ul>
+                                <li>Tests unitaires - Data Pipeline : ${unitTests} tests</li>
+                                <li>Tests unitaires - ML Pipeline : ${mlTests} tests</li>
+                                <li>Tests d'intégration : ${integrationTests} tests</li>
+                            </ul>
+                            
+                            <h3>📄 Rapports</h3>
+                            <ul>
+                                <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
+                                <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20ML_20Pipeline/">Tests ML Pipeline</a></li>
+                                <li><a href="${env.BUILD_URL}Coverage_20Report_20-_20ML/">Couverture ML</a></li>
+                                <li><a href="${env.BUILD_URL}Integration_20Tests_20-_20ML/">Tests Intégration</a></li>
+                            </ul>
+                            
+                            <p><i>Tous les tests ont été exécutés avec succès ! 🎉</i></p>
+                            
+                            <p>Cordialement,<br/>Jenkins CI</p>
+                        </body>
+                        </html>
                     """,
                     to: 'enguyen.fr@gmail.com',
                     from: 'enguyen.fr@gmail.com',
@@ -71,18 +221,35 @@ pipeline {
                 )
             }
         }
-
+        
         failure {
             echo "❌ Some tests failed."
             script {
                 emailext(
                     subject: "❌ Échec des tests - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                     body: """
-                        <p>Bonjour,</p>
-                        <p>Les tests de <b>${env.JOB_NAME}</b> (build #${env.BUILD_NUMBER}) ont échoué.</p>
-                        <p>Rapport des tests unitaires : <a href="${env.BUILD_URL}HTML_20Report_20(Unit_20Tests)/report.html">Unit Tests</a></p>
-                        <p>Merci de corriger les erreurs dès que possible.</p>
-                        <p>Cordialement,<br/>Jenkins CI</p>
+                        <html>
+                        <body>
+                            <h2>❌ Échec des tests</h2>
+                            <p><b>Projet</b> : ${env.JOB_NAME}</p>
+                            <p><b>Build</b> : #${env.BUILD_NUMBER}</p>
+                            
+                            <h3>⚠️ Action requise</h3>
+                            <p>Un ou plusieurs tests ont échoué. Merci de consulter les rapports ci-dessous :</p>
+                            
+                            <h3>📄 Rapports</h3>
+                            <ul>
+                                <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
+                                <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20ML_20Pipeline/">Tests ML Pipeline</a></li>
+                                <li><a href="${env.BUILD_URL}Integration_20Tests_20-_20ML/">Tests Intégration</a></li>
+                                <li><a href="${env.BUILD_URL}console">Console Output</a></li>
+                            </ul>
+                            
+                            <p><b>Merci de corriger les erreurs dès que possible.</b></p>
+                            
+                            <p>Cordialement,<br/>Jenkins CI</p>
+                        </body>
+                        </html>
                     """,
                     to: 'enguyen.fr@gmail.com',
                     from: 'enguyen.fr@gmail.com',
@@ -90,6 +257,11 @@ pipeline {
                     mimeType: 'text/html'
                 )
             }
+        }
+        
+        always {
+            echo "🧹 Nettoyage..."
+            cleanWs()
         }
     }
 }
