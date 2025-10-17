@@ -169,42 +169,12 @@ pipeline {
     success {
         echo "✅ All tests passed!"
         script {
-            def unitTests = 0
-            def mlTests = 0
-            def integrationTests = 0
+            def testResultAction = currentBuild.rawBuild.getAction(hudson.tasks.junit.TestResultAction)
+            def totalTests = testResultAction?.totalCount ?: 0
+            def failedTests = testResultAction?.failCount ?: 0
+            def skippedTests = testResultAction?.skipCount ?: 0
 
-            try {
-                def unitXml = readFile("BLOC_04/reports/unit/report.xml")
-                def matcher = unitXml =~ /<testsuite[^>]*tests="(\d+)"/
-                if (matcher) {
-                    unitTests = matcher[0][1] as Integer
-                }
-                echo "Unit tests found: ${unitTests}"
-            } catch (Exception e) {
-                echo "⚠️ Failed to read unit report: ${e.message}"
-            }
-
-            try {
-                def mlXml = readFile("BLOC_04/reports/ml/report.xml")
-                def matcher = mlXml =~ /<testsuite[^>]*tests="(\d+)"/
-                if (matcher) {
-                    mlTests = matcher[0][1] as Integer
-                }
-                echo "ML tests found: ${mlTests}"
-            } catch (Exception e) {
-                echo "⚠️ Failed to read ML report: ${e.message}"
-            }
-
-            try {
-                def integXml = readFile("BLOC_04/reports/integration/report.xml")
-                def matcher = integXml =~ /<testsuite[^>]*tests="(\d+)"/
-                if (matcher) {
-                    integrationTests = matcher[0][1] as Integer
-                }
-                echo "Integration tests found: ${integrationTests}"
-            } catch (Exception e) {
-                echo "⚠️ Failed to read integration report: ${e.message}"
-            }
+            echo "Tests total: ${totalTests}, failed: ${failedTests}, skipped: ${skippedTests}"
 
             emailext(
                 subject: "✅ Tests réussis - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
@@ -214,13 +184,15 @@ pipeline {
                         <h2>✅ Tests réussis</h2>
                         <p><b>Projet</b> : ${env.JOB_NAME}</p>
                         <p><b>Build</b> : #${env.BUILD_NUMBER}</p>
-                        
-                        <h3>📊 Résumé des tests</h3>
+
+                        <h3>📊 Résumé global des tests</h3>
                         <ul>
-                            <li>Tests unitaires - Data Pipeline : ${unitTests} tests</li>
-                            <li>Tests unitaires - ML Pipeline : ${mlTests} tests</li>
-                            <li>Tests d'intégration : ${integrationTests} tests</li>
+                            <li>Total : ${totalTests}</li>
+                            <li>Échoués : ${failedTests}</li>
+                            <li>Ignorés : ${skippedTests}</li>
                         </ul>
+
+                        <p><a href="${env.BUILD_URL}testReport">Voir les rapports détaillés sur Jenkins</a></p>
                         
                         <p>Cordialement,<br/>Jenkins CI</p>
                     </body>
@@ -228,11 +200,12 @@ pipeline {
                 """,
                 to: 'enguyen.fr@gmail.com',
                 from: 'enguyen.fr@gmail.com',
-                replyTo: 'enguyen.fr@gmail.com',
                 mimeType: 'text/html'
             )
         }
     }
+}
+
 
       
         failure {
