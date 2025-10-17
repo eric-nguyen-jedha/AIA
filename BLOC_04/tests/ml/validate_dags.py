@@ -1,257 +1,59 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-Script de validation des DAGs Airflow — version stable pour CI/CD
-Vérifie que les DAGs ML peuvent être importés sans erreur
-"""
-import sys
-from pathlib import Path
-from unittest.mock import MagicMock
+from datetime import datetime, timedelta
+import pandas as pd
+import numpy as np
+import os
+import json
+import requests
 
-# =============================================================================
-# 🛡️ MOCK COMPLET D'AIRFLOW
-# =============================================================================
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from airflow.models import Variable
 
-# Liste des modules Airflow à mocker
-modules_to_mock = [
-    "airflow",
-    "airflow.models",
-    "airflow.models.Variable",
-    "airflow.models.dag",
-    "airflow.models.baseoperator",
-    "airflow.operators",
-    "airflow.operators.python",
-    "airflow.providers",
-    "airflow.providers.standard",
-    "airflow.providers.standard.operators",
-    "airflow.providers.standard.operators.python",
-    "airflow.providers.amazon",
-    "airflow.providers.amazon.aws",
-    "airflow.providers.amazon.aws.hooks",
-    "airflow.providers.amazon.aws.hooks.s3",
-    "airflow.exceptions",
-    "airflow.utils",
-    "airflow.utils.dates",
-]
+import mlflow
+import boto3
 
-for mod_name in modules_to_mock:
-    sys.modules[mod_name] = MagicMock()
+# ----------------------------
+# Configuration DAG
+# ----------------------------
+default_args = {
+    'owner': 'data_team',
+    'depends_on_past': False,
+    'start_date': datetime(2025, 1, 1),
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 2,
+    'retry_delay': timedelta(minutes=3),
+}
 
-# Mock des dépendances externes
-sys.modules["mlflow"] = MagicMock()
-sys.modules["mlflow.pyfunc"] = MagicMock()
-sys.modules["mlflow.xgboost"] = MagicMock()
-sys.modules["mlflow.tracking"] = MagicMock()
-sys.modules["boto3"] = MagicMock()
+dag = DAG(
+    'real_time_weather_prediction',
+    default_args=default_args,
+    description='Prédiction météo en temps réel avec MLflow et OpenWeather API',
+    schedule=timedelta(minutes=5),
+    catchup=False,
+    tags=['ml', 'weather', 'prediction', 'real-time', 'openweather', 'mlflow'],
+)
 
-# Mock spécifique de Variable.get
-class MockVariable:
-    @staticmethod
-    def get(key, default_var=None):
-        fake_vars = {
-            "BUCKET": "test-bucket",
-            "AWS_ACCESS_KEY_ID": "fake_key",
-            "AWS_SECRET_ACCESS_KEY": "fake_secret",
-            "AWS_DEFAULT_REGION": "eu-west-3",
-            "OPEN_WEATHER_API_KEY": "fake_api_key",
-            "mlflow_uri": "http://localhost:8081",
-            "ARTIFACT_STORE_URI": "s3://test-bucket/mlflow"
-        }
-        return fake_vars.get(key, default_var or f"mock_{key}")
+# ----------------------------
+# Variables Airflow / config
+# ----------------------------
+CITIES = {
+    'paris': {'lat': 48.8566, 'lon': 2.3522, 'name': 'Paris'},
+    'toulouse': {'lat': 43.6047, 'lon': 1.4442, 'name': 'Toulouse'},
+    'lyon': {'lat': 45.7640, 'lon': 4.8357, 'name': 'Lyon'},
+    'marseille': {'lat': 43.2965, 'lon': 5.3698, 'name': 'Marseille'},
+    'nantes': {'lat': 47.2184, 'lon': -1.5536, 'name': 'Nantes'}
+}
 
-# Injecter le mock de Variable
-sys.modules["airflow.models"].Variable = MockVariable
+BUCKET = Variable.get("BUCKET")
 
-# Mock de DAG avec un attribut dag_id pour la détection
-class MockDAG:
-    def __init__(self, dag_id, *args, **kwargs):
-        self.dag_id = dag_id
-        self.default_args = kwargs.get('default_args', {})
-        self.description = kwargs.get('description', '')
-        self.schedule = kwargs.get('schedule', None)
-        self.catchup = kwargs.get('catchup', False)
-        self.tags = kwargs.get('tags', [])
-    
-    def __enter__(self):
-        return self
-    
-    def __exit__(self, *args):
-        pass
-
-sys.modules["airflow"].DAG = MockDAG
-sys.modules["airflow.models"].DAG = MockDAG
-
-# Mock de PythonOperator avec support de l'opérateur >>
-class MockPythonOperator:
-    def __init__(self, *args, **kwargs):
-        self.task_id = kwargs.get('task_id', 'mock_task')
-        self.python_callable = kwargs.get('python_callable')
-        self.dag = kwargs.get('dag')
-    
-    def __rshift__(self, other):
-        """Support de l'opérateur >> pour les dépendances"""
-        return other
-    
-    def __lshift__(self, other):
-        """Support de l'opérateur << pour les dépendances"""
-        return self
-    
-    def set_upstream(self, other):
-        """Méthode alternative pour définir les dépendances"""
-        pass
-    
-    def set_downstream(self, other):
-        """Méthode alternative pour définir les dépendances"""
-        pass
-
-# Appliquer le mock à tous les imports possibles de PythonOperator
-sys.modules["airflow.operators.python"].PythonOperator = MockPythonOperator
-if "airflow.providers.standard" in sys.modules:
-    if "airflow.providers.standard.operators" not in sys.modules:
-        sys.modules["airflow.providers.standard.operators"] = MagicMock()
-    if "airflow.providers.standard.operators.python" not in sys.modules:
-        sys.modules["airflow.providers.standard.operators.python"] = MagicMock()
-    sys.modules["airflow.providers.standard.operators.python"].PythonOperator = MockPythonOperator
-
-# Mock d'autres opérateurs si nécessaires
-class MockBaseOperator:
-    def __init__(self, *args, **kwargs):
-        self.task_id = kwargs.get('task_id', 'mock_task')
-        self.dag = kwargs.get('dag')
-    
-    def __rshift__(self, other):
-        return other
-    
-    def __lshift__(self, other):
-        return self
-
-if "airflow.models.baseoperator" in sys.modules:
-    sys.modules["airflow.models.baseoperator"].BaseOperator = MockBaseOperator
-
-# =============================================================================
-# Fonction de validation
-# =============================================================================
-
-import importlib.util
-
-def validate_dag_file(dag_path):
-    """Valider un fichier DAG individuel"""
-    print(f"📄 Validation de {dag_path.name}...")
-    
-    try:
-        # Charger le module
-        module_name = dag_path.stem
-        spec = importlib.util.spec_from_file_location(module_name, str(dag_path))
-        
-        if spec is None:
-            print("  ❌ Impossible de créer la spec du module")
-            return False
-        
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
-        
-        # Exécuter le module
-        spec.loader.exec_module(module)
-        
-        # Chercher les DAGs dans le module
-        dags_found = []
-        for attr_name in dir(module):
-            attr = getattr(module, attr_name)
-            # Vérifier si c'est un MockDAG ou un objet avec dag_id
-            if isinstance(attr, MockDAG) or (hasattr(attr, 'dag_id') and hasattr(attr, 'default_args')):
-                dags_found.append(attr.dag_id)
-        
-        if not dags_found:
-            print("  ⚠️  Aucun DAG trouvé dans le module")
-            return False
-        
-        print(f"  ✅ DAGs trouvés: {', '.join(dags_found)}")
-        return True
-        
-    except SyntaxError as e:
-        print(f"  ❌ Erreur de syntaxe: {e}")
-        return False
-    except ImportError as e:
-        print(f"  ❌ Erreur d'import: {e}")
-        return False
-    except Exception as e:
-        print(f"  ❌ Erreur lors de la validation: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def main():
-    """Valider tous les DAGs ML"""
-    
-    # Déterminer le chemin des DAGs
-    # Si exécuté depuis BLOC_04/tests/ml/validate_dags.py
-    script_dir = Path(__file__).parent
-    
-    # Essayer plusieurs chemins possibles
-    possible_paths = [
-        script_dir.parent.parent / "dags_ml",  # BLOC_04/dags_ml
-        script_dir.parent.parent / "dags",      # BLOC_04/dags (si même répertoire)
-        Path.cwd() / "dags_ml",                 # Si exécuté depuis BLOC_04
-    ]
-    
-    dags_dir = None
-    for path in possible_paths:
-        if path.exists():
-            dags_dir = path
-            break
-    
-    if dags_dir is None:
-        print("❌ Impossible de trouver le répertoire dags_ml/")
-        print(f"   Chemins testés: {[str(p) for p in possible_paths]}")
-        sys.exit(1)
-    
-    print("=" * 60)
-    print("🔍 VALIDATION DES DAGS AIRFLOW ML")
-    print("=" * 60)
-    print(f"📂 Répertoire: {dags_dir}")
-    print()
-    
-    # Liste des DAGs à valider
-    dags_to_validate = [
-        "realtime_prediction_forecast.py",
-        "paris_meteo_ml_pipeline.py"
-    ]
-    
-    results = {}
-    for filename in dags_to_validate:
-        dag_path = dags_dir / filename
-        
-        if not dag_path.exists():
-            print(f"❌ Fichier non trouvé: {filename}")
-            print(f"   Chemin complet: {dag_path}")
-            results[filename] = False
-            continue
-        
-        results[filename] = validate_dag_file(dag_path)
-        print()
-    
-    # Résumé
-    print("=" * 60)
-    print("📊 RÉSUMÉ")
-    print("=" * 60)
-    
-    total = len(results)
-    passed = sum(results.values())
-    failed = total - passed
-    
-    print(f"Total: {total}")
-    print(f"✅ Réussis: {passed}")
-    print(f"❌ Échoués: {failed}")
-    print()
-    
-    if failed > 0:
-        print("❌ La validation a échoué!")
-        sys.exit(1)
-    else:
-        print("✅ Tous les DAGs sont valides!")
-        sys.exit(0)
-
-
-if __name__ == "__main__":
-    main()
+# Mapping des codes vers les labels météo
+# Basé sur l'ordre alphabétique : Clear, Clouds, Fog, Rain, Snow
+WEATHER_CODE_MAPPING = {
+    0: 'Clear',
+    1: 'Clouds',
+    2: 'Fog',
+    3: 'Rain',
+    4: 'Snow'
+}
