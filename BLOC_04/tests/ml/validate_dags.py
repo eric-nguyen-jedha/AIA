@@ -16,7 +16,7 @@ modules_to_mock = [
     "airflow",
     "airflow.models",
     "airflow.models.Variable",
-    "airflow.models.dag",
+#    "airflow.models.dag",
     "airflow.models.dagbag",
     "airflow.operators",
     "airflow.operators.python",
