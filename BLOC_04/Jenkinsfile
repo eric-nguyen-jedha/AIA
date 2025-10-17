@@ -187,34 +187,46 @@ pipeline {
                 def integrationTests = 0
 
                 try {
-                    def unitXml = readFile("collected_reports/unit/report.xml")
-                    def matcher = unitXml =~ /<testsuite[^>]*tests="(\d+)"/
-                    if (matcher) {
-                        unitTests = matcher[0][1] as Integer
+                    if (fileExists("collected_reports/unit/report.xml")) {
+                        def unitXml = readFile("collected_reports/unit/report.xml")
+                        def matcher = (unitXml =~ /<testsuite[^>]*tests="(\d+)"/)
+                        matcher.each { match ->
+                            unitTests += match[1] as Integer
+                        }
+                        echo "Unit tests found: ${unitTests}"
+                    } else {
+                        echo "⚠️ No unit XML found"
                     }
-                    echo "Unit tests found: ${unitTests}"
                 } catch (Exception e) {
                     echo "⚠️ Failed to read unit report: ${e.message}"
                 }
 
                 try {
-                    def mlXml = readFile("collected_reports/ml/report.xml")
-                    def matcher = mlXml =~ /<testsuite[^>]*tests="(\d+)"/
-                    if (matcher) {
-                        mlTests = matcher[0][1] as Integer
+                    if (fileExists("collected_reports/ml/report.xml")) {
+                        def mlXml = readFile("collected_reports/ml/report.xml")
+                        def matcher = (mlXml =~ /<testsuite[^>]*tests="(\d+)"/)
+                        matcher.each { match ->
+                            mlTests += match[1] as Integer
+                        }
+                        echo "ML tests found: ${mlTests}"
+                    } else {
+                        echo "⚠️ No ML XML found"
                     }
-                    echo "ML tests found: ${mlTests}"
                 } catch (Exception e) {
                     echo "⚠️ Failed to read ML report: ${e.message}"
                 }
 
                 try {
-                    def integXml = readFile("collected_reports/integration/report.xml")
-                    def matcher = integXml =~ /<testsuite[^>]*tests="(\d+)"/
-                    if (matcher) {
-                        integrationTests = matcher[0][1] as Integer
+                    if (fileExists("collected_reports/integration/report.xml")) {
+                        def integXml = readFile("collected_reports/integration/report.xml")
+                        def matcher = (integXml =~ /<testsuite[^>]*tests="(\d+)"/)
+                        matcher.each { match ->
+                            integrationTests += match[1] as Integer
+                        }
+                        echo "Integration tests found: ${integrationTests}"
+                    } else {
+                        echo "⚠️ No integration XML found"
                     }
-                    echo "Integration tests found: ${integrationTests}"
                 } catch (Exception e) {
                     echo "⚠️ Failed to read integration report: ${e.message}"
                 }
