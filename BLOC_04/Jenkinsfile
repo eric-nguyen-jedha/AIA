@@ -204,61 +204,84 @@ EOF
     }
     
     post {
-        success {
-            echo "✅ All tests passed!"
-            script {
-                // Compter les tests
-                def unitTests = 0
-                def mlTests = 0
-                def integrationTests = 0
-                
-                try {
-                    def unitXml = readFile("${REPORT_DIR}/unit/report.xml")
-                    unitTests = (unitXml =~ /tests="(\d+)"/).findAll().size()
-                } catch (Exception e) {}
-                
-                try {
-                    def mlXml = readFile("${REPORT_DIR}/ml/report.xml")
-                    mlTests = (mlXml =~ /tests="(\d+)"/).findAll().size()
-                } catch (Exception e) {}
-                
-                emailext(
-                    subject: "✅ Tests réussis - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                    body: """
-                        <html>
-                        <body>
-                            <h2>✅ Tests réussis</h2>
-                            <p><b>Projet</b> : ${env.JOB_NAME}</p>
-                            <p><b>Build</b> : #${env.BUILD_NUMBER}</p>
-                            
-                            <h3>📊 Résumé des tests</h3>
-                            <ul>
-                                <li>Tests unitaires - Data Pipeline : ${unitTests} tests</li>
-                                <li>Tests unitaires - ML Pipeline : ${mlTests} tests</li>
-                                <li>Tests d'intégration : ${integrationTests} tests</li>
-                            </ul>
-                            
-                            <h3>📄 Rapports</h3>
-                            <ul>
-                                <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
-                                <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20ML_20Pipeline/">Tests ML Pipeline</a></li>
-                                <li><a href="${env.BUILD_URL}Coverage_20Report_20-_20ML/">Couverture ML</a></li>
-                                <li><a href="${env.BUILD_URL}Integration_20Tests_20-_20ML/">Tests Intégration</a></li>
-                            </ul>
-                            
-                            <p><i>Tous les tests ont été exécutés avec succès ! 🎉</i></p>
-                            
-                            <p>Cordialement,<br/>Jenkins CI</p>
-                        </body>
-                        </html>
-                    """,
-                    to: 'enguyen.fr@gmail.com',
-                    from: 'enguyen.fr@gmail.com',
-                    replyTo: 'enguyen.fr@gmail.com',
-                    mimeType: 'text/html'
-                )
+    success {
+        echo "✅ All tests passed!"
+        script {
+            // Compter les tests de manière fiable
+            def unitTests = 0
+            def mlTests = 0
+            def integrationTests = 0 // Le comptage pour ce rapport n'était pas implémenté
+
+            try {
+                def unitXml = readFile("${REPORT_DIR}/unit/report.xml")
+                // Utilise un Matcher pour trouver la première occurrence et capturer le groupe (le nombre)
+                def unitMatcher = (unitXml =~ /<testsuite[^>]* tests="(\d+)"/)
+                if (unitMatcher.find()) {
+                    unitTests = unitMatcher.group(1).toInteger()
+                }
+            } catch (Exception e) {
+                echo "Attention : Le rapport de tests unitaires (Data Pipeline) n'a pas pu être lu. Détails : ${e}"
             }
+            
+            try {
+                def mlXml = readFile("${REPORT_DIR}/ml/report.xml")
+                def mlMatcher = (mlXml =~ /<testsuite[^>]* tests="(\d+)"/)
+                if (mlMatcher.find()) {
+                    mlTests = mlMatcher.group(1).toInteger()
+                }
+            } catch (Exception e) {
+                echo "Attention : Le rapport de tests unitaires (ML Pipeline) n'a pas pu être lu. Détails : ${e}"
+            }
+
+            try {
+                def integrationXml = readFile("${REPORT_DIR}/integration/report.xml")
+                def integrationMatcher = (integrationXml =~ /<testsuite[^>]* tests="(\d+)"/)
+                if (integrationMatcher.find()) {
+                    integrationTests = integrationMatcher.group(1).toInteger()
+                }
+            } catch (Exception e) {
+                echo "Attention : Le rapport de tests d'intégration n'a pas pu être lu. Détails : ${e}"
+            }
+
+            // Le reste de votre script d'envoi d'email reste identique...
+            emailext(
+                subject: "✅ Tests réussis - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                    <html>
+                    <body>
+                        <h2>✅ Tests réussis</h2>
+                        <p><b>Projet</b> : ${env.JOB_NAME}</p>
+                        <p><b>Build</b> : #${env.BUILD_NUMBER}</p>
+                        
+                        <h3>📊 Résumé des tests</h3>
+                        <ul>
+                            <li>Tests unitaires - Data Pipeline : ${unitTests} tests</li>
+                            <li>Tests unitaires - ML Pipeline : ${mlTests} tests</li>
+                            <li>Tests d'intégration : ${integrationTests} tests</li>
+                        </ul>
+                        
+                        <h3>📄 Rapports</h3>
+                        <ul>
+                            <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
+                            <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20ML_20Pipeline/">Tests ML Pipeline</a></li>
+                            <li><a href="${env.BUILD_URL}Coverage_20Report_20-_20ML/">Couverture ML</a></li>
+                            <li><a href="${env.BUILD_URL}Integration_20Tests_20-_20ML/">Tests Intégration</a></li>
+                        </ul>
+                        
+                        <p><i>Tous les tests ont été exécutés avec succès ! 🎉</i></p>
+                        
+                        <p>Cordialement,<br/>Jenkins CI</p>
+                    </body>
+                    </html>
+                """,
+                to: 'enguyen.fr@gmail.com',
+                from: 'enguyen.fr@gmail.com',
+                replyTo: 'enguyen.fr@gmail.com',
+                mimeType: 'text/html'
+            )
         }
+    }
+    
         
         failure {
             echo "❌ Some tests failed."
