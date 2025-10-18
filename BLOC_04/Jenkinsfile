@@ -1,5 +1,5 @@
 // ===============================
-// ✅ Jenkinsfile complet et stable
+// ✅ Jenkinsfile complet et stable avec déclenchement Airflow
 // ===============================
 
 // Variables globales pour stocker les résultats des tests
@@ -14,17 +14,17 @@ pipeline {
             args '-u root:root'
         }
     }
-    
+
     environment {
         WORK_DIR = "BLOC_04"
         REPORT_DIR = "${WORK_DIR}/reports"
         UNIT_REPORT = "${REPORT_DIR}/unit"
         ML_REPORT = "${REPORT_DIR}/ml"
         INTEGRATION_REPORT = "${REPORT_DIR}/integration"
-        AIRFLOW_CONTAINER = "airflow-airflow-scheduler-1"  // ✅ nom du conteneur Airflow visible dans ton `docker ps`
+        AIRFLOW_CONTAINER = "airflow-airflow-scheduler-1"  // conteneur Airflow à adapter
         DAG_ID = "etl_weather_dag"
     }
-    
+
     stages {
 
         stage('Install dependencies') {
@@ -143,7 +143,7 @@ pipeline {
                                     return 0
                                 }
                                 def reportContent = readFile(reportPath)
-                                def matcher = (reportContent =~ /<testsuite[^>]* tests=\"(\\d+)\"/)
+                                def matcher = (reportContent =~ /<testsuite[^>]* tests="(\d+)"/)
                                 if (matcher.find()) {
                                     def count = matcher.group(1).toInteger()
                                     echo "   -> ${count} test(s) trouvés dans ${reportPath}"
@@ -177,13 +177,13 @@ pipeline {
             }
         }
 
-        // ✅ STAGE FINAL : déclenchement du DAG Airflow depuis le host Jenkins
+        // 🔥 NOUVEAU STAGE : déclenchement du DAG Airflow depuis le nœud maître Jenkins
         stage('Trigger Airflow DAG') {
             agent none
             steps {
-                node {
+                node('master') {
                     script {
-                        echo "🚀 Déclenchement du DAG Airflow '${DAG_ID}' sur le scheduler (depuis le host Jenkins)..."
+                        echo "🚀 Déclenchement du DAG Airflow '${DAG_ID}' sur le scheduler..."
 
                         sh """
                             docker exec ${AIRFLOW_CONTAINER} bash -c '
