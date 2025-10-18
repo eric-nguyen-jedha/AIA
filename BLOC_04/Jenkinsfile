@@ -1,5 +1,5 @@
 // ===============================
-// ✅ Jenkinsfile complet et final (Installation Docker Robuste)
+// ✅ Jenkinsfile complet et final (avec traçabilité améliorée)
 // ===============================
 
 // Variables globales pour stocker les résultats des tests
@@ -34,18 +34,11 @@ pipeline {
                         apt-get update && apt-get install -y --no-install-recommends gcc ssh curl
                         
                         echo "🐳 Installation du client Docker (méthode robuste)..."
-                        # URL du binaire statique de Docker
                         DOCKER_VERSION=24.0.5
                         DOCKER_URL="https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz"
-                        
-                        # Téléchargement et extraction
                         curl -fsSL ${DOCKER_URL} -o docker.tgz
                         tar -xvzf docker.tgz
-                        
-                        # On déplace le binaire dans le PATH système
                         mv docker/docker /usr/bin/docker
-                        
-                        # Nettoyage
                         rm -rf docker docker.tgz
                         
                         echo "✅ Vérification de l'installation de Docker..."
@@ -200,14 +193,23 @@ pipeline {
         stage('Trigger Airflow DAG via CLI') {
             steps {
                 script {
-                    echo "🚀 Déclenchement du DAG '${DAG_ID}' via la CLI Airflow..."
+                    echo "🚀 Déclenchement du DAG '${DAG_ID}' via la CLI Airflow avec métadonnées Jenkins..."
                     
                     def schedulerContainerName = "airflow-airflow-scheduler-1" 
 
-                    echo "   -> Conteneur cible : ${schedulerContainerName}"
+                    // Créer un Run ID clair et unique qui identifie la source et le build
+                    def runId = "jenkins_build_${env.BUILD_NUMBER}"
 
+                    // Créer une charge utile JSON avec des informations de traçabilité
+                    def confJson = """{"triggered_by": "Jenkins", "job_name": "${env.JOB_NAME}", "build_number": ${env.BUILD_NUMBER}}"""
+
+                    echo "   -> Conteneur cible : ${schedulerContainerName}"
+                    echo "   -> Run ID généré : ${runId}"
+                    echo "   -> Configuration : ${confJson}"
+
+                    // Exécuter la commande avec les options --run-id et -c (ou --conf)
                     sh """
-                        docker exec ${schedulerContainerName} airflow dags trigger ${DAG_ID}
+                        docker exec ${schedulerContainerName} airflow dags trigger --run-id '${runId}' -c '${confJson}' ${DAG_ID}
                     """
 
                     echo "✅ Commande de déclenchement pour le DAG '${DAG_ID}' envoyée via la CLI."
@@ -236,7 +238,7 @@ pipeline {
                                 <li>Tests d'intégration : ${integrationTests} tests</li>
                             </ul>
                             <h3>🚀 Airflow</h3>
-                            <p>Le DAG <b>${DAG_ID}</b> a été déclenché avec succès via la CLI.</p>
+                            <p>Le DAG <b>${DAG_ID}</b> a été déclenché avec succès via la CLI avec le Run ID <b>jenkins_build_${env.BUILD_NUMBER}</b>.</p>
                             <h3>📄 Rapports</h3>
                             <ul>
                                 <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
@@ -282,4 +284,4 @@ pipeline {
             cleanWs()
         }
     }
-}
+}```
