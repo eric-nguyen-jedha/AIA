@@ -112,13 +112,13 @@ pipeline {
             }
         }
         
-        // Ce stage est important pour créer le répertoire summary
+        // Ce stage a été restauré pour créer le répertoire 'summary' et éviter une erreur
         stage('Generate Test Summary') {
             steps {
                 dir("${WORK_DIR}") {
                     sh '''
                         mkdir -p reports/summary
-                        echo "<html><body>Dummy Summary</body></html>" > reports/summary/summary.html
+                        echo "<html><body>Dummy Summary to prevent publishHTML error.</body></html>" > reports/summary/summary.html
                     '''
                 }
             }
@@ -139,11 +139,11 @@ pipeline {
                                 }
                                 def reportContent = readFile(reportPath)
                                 
-                                // Regex robuste qui ignore les autres attributs et le formatage
+                                // Regex robuste qui est autorisée dans le Sandbox de Jenkins
                                 def matcher = (reportContent =~ /<testsuite[^>]* tests="(\d+)"/)
                                 
-                                if (matcher) {
-                                    def count = matcher[0][1].toInteger()
+                                if (matcher.find()) {
+                                    def count = matcher.group(1).toInteger()
                                     echo "   -> Trouvé ${count} test(s) dans ${reportPath}"
                                     return count
                                 } else {
@@ -220,12 +220,45 @@ pipeline {
         
         failure {
             echo "❌ Some tests failed."
-            // ... Votre section 'failure' reste identique ...
+            script {
+                emailext(
+                    subject: "❌ Échec des tests - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    body: """
+                        <html>
+                        <body>
+                            <h2>❌ Échec des tests</h2>
+                            <p><b>Projet</b> : ${env.JOB_NAME}</p>
+                            <p><b>Build</b> : #${env.BUILD_NUMBER}</p>
+                            
+                            <h3>⚠️ Action requise</h3>
+                            <p>Un ou plusieurs tests ont échoué. Merci de consulter les rapports ci-dessous :</p>
+                            
+                            <h3>📄 Rapports</h3>
+                            <ul>
+                                <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
+                                <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20ML_20Pipeline/">Tests ML Pipeline</a></li>
+                                <li><a href="${env.BUILD_URL}Integration_20Tests_20-_20ML/">Tests Intégration</a></li>
+                                <li><a href="${env.BUILD_URL}console">Console Output</a></li>
+                            </ul>
+                            
+                            <p><b>Merci de corriger les erreurs dès que possible.</b></p>
+                            
+                            <p>Cordialement,<br/>Jenkins CI</p>
+                        </body>
+                        </html>
+                    """,
+                    to: 'enguyen.fr@gmail.com',
+                    from: 'enguyen.fr@gmail.com',
+                    replyTo: 'enguyen.fr@gmail.com',
+                    mimeType: 'text/html'
+                )
+            }
         }
         
         cleanup {
+            // Cette action est garantie de s'exécuter en tout dernier
             echo "🧹 Nettoyage final de l'espace de travail..."
             cleanWs()
         }
     }
-}```
+}
