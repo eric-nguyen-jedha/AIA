@@ -1,5 +1,5 @@
 // ===============================
-// ✅ Jenkinsfile complet et final (avec vérification de l'installation de Docker)
+// ✅ Jenkinsfile complet et final (Installation Docker Robuste)
 // ===============================
 
 // Variables globales pour stocker les résultats des tests
@@ -30,16 +30,25 @@ pipeline {
             steps {
                 dir("${WORK_DIR}") {
                     sh '''
-                        echo "📦 Installation des dépendances système (avec nettoyage du cache)..."
-                        # On nettoie les listes apt pour forcer une mise à jour fraîche
-                        rm -rf /var/lib/apt/lists/*
+                        echo "📦 Installation des dépendances système..."
+                        apt-get update && apt-get install -y --no-install-recommends gcc ssh curl
                         
-                        # Installation des paquets, y compris le client Docker
-                        apt-get update && apt-get install -y --no-install-recommends gcc ssh curl docker.io
+                        echo "🐳 Installation du client Docker (méthode robuste)..."
+                        # URL du binaire statique de Docker
+                        DOCKER_VERSION=24.0.5
+                        DOCKER_URL="https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz"
+                        
+                        # Téléchargement et extraction
+                        curl -fsSL ${DOCKER_URL} -o docker.tgz
+                        tar -xvzf docker.tgz
+                        
+                        # On déplace le binaire dans le PATH système
+                        mv docker/docker /usr/bin/docker
+                        
+                        # Nettoyage
+                        rm -rf docker docker.tgz
                         
                         echo "✅ Vérification de l'installation de Docker..."
-                        # On vérifie que la commande 'docker' est bien installée ET dans le PATH
-                        # Si ce n'est pas le cas, on fait échouer le build ici avec une erreur claire.
                         which docker || (echo "ERREUR: Le client Docker n'a pas été trouvé après l'installation." && exit 1)
                         
                         echo "🐍 Installation des dépendances Python..."
