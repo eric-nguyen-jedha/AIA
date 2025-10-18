@@ -246,8 +246,11 @@ class TestDataPreparation:
         df = pd.DataFrame(data)
         with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
             df.to_csv(f.name, index=False)
-            return f.name
+            # Utiliser 'yield' pour s'assurer que le fichier est supprimé après le test
+            yield f.name
+        os.unlink(f.name) # Nettoyage explicite
     
+    @pytest.mark.integration
     def test_csv_has_required_columns(self, sample_weather_csv):
         """Test que le CSV contient les colonnes nécessaires"""
         df = pd.read_csv(sample_weather_csv)
