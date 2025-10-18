@@ -169,67 +169,21 @@ pipeline {
         success {
             echo "✅ All tests passed!"
             script {
+                // Compter les tests
                 def unitTests = 0
                 def mlTests = 0
                 def integrationTests = 0
-
-                dir("${WORK_DIR}") {
-                    sh '''
-                        echo "=== Debug: listing reports dirs ==="
-                        ls -la reports/ || echo "reports dir not found"
-                        ls -la reports/unit/ || echo "unit dir empty or missing"
-                        ls -la reports/ml/ || echo "ml dir empty or missing"
-                        ls -la reports/integration/ || echo "integration dir empty or missing"
-                    '''
-                }
-
-                dir("${WORK_DIR}") {
-                    try {
-                        if (fileExists("reports/unit/report.xml")) {
-                            def unitXml = readFile("reports/unit/report.xml")
-                            def matcher = (unitXml =~ /<testsuite[^>]*tests="(\d+)"/)
-                            matcher.each { match ->
-                                unitTests += match[1] as Integer
-                            }
-                            echo "Unit tests found: ${unitTests}"
-                        } else {
-                            echo "⚠️ No unit XML found inside ${WORK_DIR}"
-                        }
-                    } catch (Exception e) {
-                        echo "⚠️ Failed to read unit report: ${e.message}"
-                    }
-
-                    try {
-                        if (fileExists("reports/ml/report.xml")) {
-                            def mlXml = readFile("reports/ml/report.xml")
-                            def matcher = (mlXml =~ /<testsuite[^>]*tests="(\d+)"/)
-                            matcher.each { match ->
-                                mlTests += match[1] as Integer
-                            }
-                            echo "ML tests found: ${mlTests}"
-                        } else {
-                            echo "⚠️ No ML XML found inside ${WORK_DIR}"
-                        }
-                    } catch (Exception e) {
-                        echo "⚠️ Failed to read ML report: ${e.message}"
-                    }
-
-                    try {
-                        if (fileExists("reports/integration/report.xml")) {
-                            def integXml = readFile("reports/integration/report.xml")
-                            def matcher = (integXml =~ /<testsuite[^>]*tests="(\d+)"/)
-                            matcher.each { match ->
-                                integrationTests += match[1] as Integer
-                            }
-                            echo "Integration tests found: ${integrationTests}"
-                        } else {
-                            echo "⚠️ No integration XML found inside ${WORK_DIR}"
-                        }
-                    } catch (Exception e) {
-                        echo "⚠️ Failed to read integration report: ${e.message}"
-                    }
-                }
-
+                
+                try {
+                    def unitXml = readFile("${REPORT_DIR}/unit/report.xml")
+                    unitTests = (unitXml =~ /tests="(\d+)"/).findAll().size()
+                } catch (Exception e) {}
+                
+                try {
+                    def mlXml = readFile("${REPORT_DIR}/ml/report.xml")
+                    mlTests = (mlXml =~ /tests="(\d+)"/).findAll().size()
+                } catch (Exception e) {}
+                
                 emailext(
                     subject: "✅ Tests réussis - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                     body: """
@@ -246,19 +200,28 @@ pipeline {
                                 <li>Tests d'intégration : ${integrationTests} tests</li>
                             </ul>
                             
-                            <p><a href="${env.BUILD_URL}testReport">Voir le rapport complet sur Jenkins</a></p>
-
+                            <h3>📄 Rapports</h3>
+                            <ul>
+                                <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
+                                <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20ML_20Pipeline/">Tests ML Pipeline</a></li>
+                                <li><a href="${env.BUILD_URL}Coverage_20Report_20-_20ML/">Couverture ML</a></li>
+                                <li><a href="${env.BUILD_URL}Integration_20Tests_20-_20ML/">Tests Intégration</a></li>
+                            </ul>
+                            
+                            <p><i>Tous les tests ont été exécutés avec succès ! 🎉</i></p>
+                            
                             <p>Cordialement,<br/>Jenkins CI</p>
                         </body>
                         </html>
                     """,
                     to: 'enguyen.fr@gmail.com',
                     from: 'enguyen.fr@gmail.com',
+                    replyTo: 'enguyen.fr@gmail.com',
                     mimeType: 'text/html'
                 )
             }
         }
-
+        
         failure {
             echo "❌ Some tests failed."
             script {
@@ -290,6 +253,7 @@ pipeline {
                     """,
                     to: 'enguyen.fr@gmail.com',
                     from: 'enguyen.fr@gmail.com',
+                    replyTo: 'enguyen.fr@gmail.com',
                     mimeType: 'text/html'
                 )
             }
