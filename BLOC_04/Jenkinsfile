@@ -186,8 +186,12 @@ pipeline {
         stage('Trigger Airflow DAG via API') {
             steps {
                 script {
-                    echo "🚀 Tentative de déclenchement du DAG '${DAG_ID}' via l'API REST Airflow..."
+                    echo "🚀 Tentative de déclenchement du DAG '${DAG_ID}' via l'API Airflow..."
                     echo "   -> Hôte cible : ${AIRFLOW_HOST}"
+                    
+                    // L'endpoint est changé pour l'API expérimentale
+                    def apiUrl = "${AIRFLOW_HOST}/api/experimental/dags/${DAG_ID}/dag_runs"
+                    echo "   -> Endpoint API utilisé : ${apiUrl}"
 
                     def payload = """
                     {
@@ -198,14 +202,14 @@ pipeline {
                     }
                     """
 
-                    // On utilise -v (verbose), -f (fail on error), et -o (output to file) pour un débogage complet.
+                    // On garde la version de débogage pour s'assurer que ça marche
                     sh """
                         curl -v -f -s -X POST \\
                             -H 'Content-Type: application/json' \\
                             -u ${AIRFLOW_USER}:${AIRFLOW_PASSWORD} \\
                             -d '${payload}' \\
                             -o response.json \\
-                            '${AIRFLOW_HOST}/api/v1/dags/${DAG_ID}/dagRuns'
+                            '${apiUrl}'
                     """
                     
                     echo "📄 Réponse de l'API Airflow :"
