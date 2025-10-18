@@ -14,7 +14,7 @@ pipeline {
             args '-u root:root'
         }
     }
-
+    
     environment {
         WORK_DIR = "BLOC_04"
         REPORT_DIR = "${WORK_DIR}/reports"
@@ -22,20 +22,20 @@ pipeline {
         ML_REPORT = "${REPORT_DIR}/ml"
         INTEGRATION_REPORT = "${REPORT_DIR}/integration"
         DAG_ID = "etl_weather_dag"
-        AIRFLOW_HOST = "http://airflow-airflow-apiserver-1:8080"  // Nom du conteneur webserver d'Airflow
-        AIRFLOW_USER = "admin"    // ⚠️ À adapter si autre utilisateur
-        AIRFLOW_PASS = "admin"    // ⚠️ À adapter si autre mot de passe
+        AIRFLOW_HOST = "http://host.docker.internal:8080"
+        AIRFLOW_USER = "admin"
+        AIRFLOW_PASSWORD = "admin"
     }
-
+    
     stages {
 
         stage('Install dependencies') {
             steps {
                 dir("${WORK_DIR}") {
                     sh '''
-                        apt-get update && apt-get install -y --no-install-recommends gcc
+                        apt-get update && apt-get install -y --no-install-recommends gcc ssh curl
                         pip install --upgrade pip
-                        pip install -r requirements.txt requests pytest pytest-html pytest-cov flake8 pylint
+                        pip install -r requirements.txt
                     '''
                 }
             }
@@ -179,42 +179,32 @@ pipeline {
             }
         }
 
+        // ===============================
         // 🔥 Déclenchement du DAG Airflow via API REST
+        // ===============================
         stage('Trigger Airflow DAG via API') {
             steps {
-                dir("${WORK_DIR}") {
-                    script {
-                        echo "🚀 Déclenchement du DAG Airflow '${DAG_ID}' via API REST..."
+                script {
+                    echo "🚀 Déclenchement du DAG '${DAG_ID}' via l'API REST Airflow..."
 
-                        sh """
-                            python - <<EOF
-import requests
-import json
-
-AIRFLOW_HOST = "${AIRFLOW_HOST}"
-DAG_ID = "${DAG_ID}"
-BUILD_NUMBER = "${BUILD_NUMBER}"
-USERNAME = "${AIRFLOW_USER}"
-PASSWORD = "${AIRFLOW_PASS}"
-
-url = f"{AIRFLOW_HOST}/api/v1/dags/{DAG_ID}/dagRuns"
-payload = {
-    "conf": {
-        "triggered_by": "jenkins",
-        "build_number": BUILD_NUMBER
-    }
-}
-
-resp = requests.post(url, json=payload, auth=(USERNAME, PASSWORD))
-
-if resp.status_code in [200,201]:
-    print(f"✅ DAG '{DAG_ID}' déclenché avec succès via API REST.")
-else:
-    print(f"❌ Échec déclenchement DAG {DAG_ID}: {resp.status_code} - {resp.text}")
-    exit(1)
-EOF
-                        """
+                    def payload = """
+                    {
+                        "conf": {
+                            "triggered_by": "jenkins",
+                            "build_number": "${BUILD_NUMBER}"
+                        }
                     }
+                    """
+
+                    sh """
+                        curl -s -X POST \\
+                            -H 'Content-Type: application/json' \\
+                            -u ${AIRFLOW_USER}:${AIRFLOW_PASSWORD} \\
+                            -d '${payload}' \\
+                            ${AIRFLOW_HOST}/api/v1/dags/${DAG_ID}/dagRuns
+                    """
+
+                    echo "✅ DAG '${DAG_ID}' déclenché via API Airflow."
                 }
             }
         }
@@ -240,7 +230,7 @@ EOF
                                 <li>Tests d'intégration : ${integrationTests} tests</li>
                             </ul>
                             <h3>🚀 Airflow</h3>
-                            <p>Le DAG <b>${DAG_ID}</b> a été déclenché via API REST.</p>
+                            <p>Le DAG <b>${DAG_ID}</b> a été déclenché avec succès via l'API REST.</p>
                             <h3>📄 Rapports</h3>
                             <ul>
                                 <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
@@ -248,7 +238,6 @@ EOF
                                 <li><a href="${env.BUILD_URL}Coverage_20Report_20-_20ML/">Couverture ML</a></li>
                                 <li><a href="${env.BUILD_URL}Integration_20Tests_20-_20ML/">Tests Intégration</a></li>
                             </ul>
-                            <p>Cordialement,<br/>Jenkins CI</p>
                         </body>
                         </html>
                     """,
@@ -272,7 +261,6 @@ EOF
                             <p><b>Build</b> : #${env.BUILD_NUMBER}</p>
                             <p>Le DAG Airflow <b>${DAG_ID}</b> n’a pas été déclenché, car les tests ont échoué.</p>
                             <p><a href="${env.BUILD_URL}console">Voir les logs Jenkins</a></p>
-                            <p>Cordialement,<br/>Jenkins CI</p>
                         </body>
                         </html>
                     """,
