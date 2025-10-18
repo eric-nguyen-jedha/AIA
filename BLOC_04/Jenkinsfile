@@ -1,3 +1,7 @@
+// ===============================
+// ✅ Jenkinsfile complet et stable
+// ===============================
+
 // Variables globales pour stocker les résultats des tests
 def unitTests = 0
 def mlTests = 0
@@ -17,11 +21,12 @@ pipeline {
         UNIT_REPORT = "${REPORT_DIR}/unit"
         ML_REPORT = "${REPORT_DIR}/ml"
         INTEGRATION_REPORT = "${REPORT_DIR}/integration"
-        AIRFLOW_CONTAINER = "airflow-airflow-scheduler-1"  // 🔧 nom exact du conteneur Airflow
+        AIRFLOW_CONTAINER = "airflow-airflow-scheduler-1"  // ✅ nom du conteneur Airflow visible dans ton `docker ps`
         DAG_ID = "etl_weather_dag"
     }
     
     stages {
+
         stage('Install dependencies') {
             steps {
                 dir("${WORK_DIR}") {
@@ -33,7 +38,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Lint Code') {
             steps {
                 dir("${WORK_DIR}") {
@@ -45,7 +50,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Validate DAGs') {
             steps {
                 dir("${WORK_DIR}") {
@@ -57,7 +62,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Run unit tests - Data Pipeline') {
             steps {
                 dir("${WORK_DIR}") {
@@ -74,7 +79,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Run unit tests - ML Pipeline') {
             steps {
                 dir("${WORK_DIR}") {
@@ -95,7 +100,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Run integration tests - ML') {
             steps {
                 dir("${WORK_DIR}") {
@@ -113,7 +118,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Generate Test Summary') {
             steps {
                 dir("${WORK_DIR}") {
@@ -129,26 +134,26 @@ pipeline {
             steps {
                 dir("${WORK_DIR}") {
                     script {
-                        echo "📊 Lecture des résultats des tests (Sandbox Safe)..."
+                        echo "📊 Lecture des résultats des tests..."
 
                         def getTestCount = { String reportPath ->
                             try {
                                 if (!fileExists(reportPath)) {
-                                    echo "⚠️ Fichier de rapport introuvable : ${reportPath}"
+                                    echo "⚠️ Fichier introuvable : ${reportPath}"
                                     return 0
                                 }
                                 def reportContent = readFile(reportPath)
-                                def matcher = (reportContent =~ /<testsuite[^>]* tests="(\d+)"/)
+                                def matcher = (reportContent =~ /<testsuite[^>]* tests="(\\d+)"/)
                                 if (matcher.find()) {
                                     def count = matcher.group(1).toInteger()
-                                    echo "   -> Trouvé ${count} test(s) dans ${reportPath}"
+                                    echo "   -> ${count} test(s) trouvés dans ${reportPath}"
                                     return count
                                 } else {
-                                    echo "   -> Aucun attribut 'tests' trouvé dans ${reportPath}"
+                                    echo "   -> Aucun test trouvé dans ${reportPath}"
                                     return 0
                                 }
                             } catch (Exception e) {
-                                echo "❌ Erreur de lecture sur ${reportPath}: ${e.getMessage()}"
+                                echo "❌ Erreur lecture ${reportPath}: ${e.getMessage()}"
                                 return 0
                             }
                         }
@@ -160,7 +165,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Publish reports') {
             steps {
                 junit allowEmptyResults: true, testResults: "${REPORT_DIR}/**/report.xml"
@@ -172,7 +177,9 @@ pipeline {
             }
         }
 
+        // ✅ NOUVEAU STAGE : déclenchement du DAG Airflow depuis le conteneur Jenkins principal
         stage('Trigger Airflow DAG') {
+            agent any
             steps {
                 script {
                     echo "🚀 Déclenchement du DAG Airflow '${DAG_ID}' sur le scheduler..."
@@ -185,10 +192,10 @@ pipeline {
                             echo "🚀 Déclenchement du DAG ${DAG_ID}..."
                             airflow dags trigger ${DAG_ID} --conf "{\\"triggered_by\\": \\"jenkins\\", \\"build_number\\": \\"${BUILD_NUMBER}\\"}"
 
-                            echo "⏳ Attente 5 secondes pour confirmation..."
+                            echo "⏳ Attente 5 secondes..."
                             sleep 5
 
-                            echo "📋 Vérification des exécutions récentes :"
+                            echo "📋 Liste des exécutions récentes :"
                             airflow dags list-runs -d ${DAG_ID} --no-color | head -n 10
                         '
                     """
@@ -201,7 +208,7 @@ pipeline {
 
     post {
         success {
-            echo "✅ Préparation de l'e-mail de succès avec les comptages déjà lus."
+            echo "✅ Pipeline terminé avec succès."
             script {
                 emailext(
                     subject: "✅ Tests réussis - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
@@ -211,17 +218,14 @@ pipeline {
                             <h2>✅ Tests réussis</h2>
                             <p><b>Projet</b> : ${env.JOB_NAME}</p>
                             <p><b>Build</b> : #${env.BUILD_NUMBER}</p>
-                            
                             <h3>📊 Résumé des tests</h3>
                             <ul>
                                 <li>Tests unitaires - Data Pipeline : ${unitTests} tests</li>
                                 <li>Tests unitaires - ML Pipeline : ${mlTests} tests</li>
                                 <li>Tests d'intégration : ${integrationTests} tests</li>
                             </ul>
-                            
                             <h3>🚀 Airflow</h3>
                             <p>Le DAG <b>${DAG_ID}</b> a été déclenché avec succès.</p>
-                            
                             <h3>📄 Rapports</h3>
                             <ul>
                                 <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
@@ -229,23 +233,19 @@ pipeline {
                                 <li><a href="${env.BUILD_URL}Coverage_20Report_20-_20ML/">Couverture ML</a></li>
                                 <li><a href="${env.BUILD_URL}Integration_20Tests_20-_20ML/">Tests Intégration</a></li>
                             </ul>
-                            
-                            <p><i>Tous les tests ont été exécutés avec succès et Airflow a été notifié 🎉</i></p>
-                            
                             <p>Cordialement,<br/>Jenkins CI</p>
                         </body>
                         </html>
                     """,
                     to: 'enguyen.fr@gmail.com',
                     from: 'enguyen.fr@gmail.com',
-                    replyTo: 'enguyen.fr@gmail.com',
                     mimeType: 'text/html'
                 )
             }
         }
-        
+
         failure {
-            echo "❌ Some tests failed."
+            echo "❌ Des tests ont échoué."
             script {
                 emailext(
                     subject: "❌ Échec des tests - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
@@ -255,33 +255,21 @@ pipeline {
                             <h2>❌ Échec des tests</h2>
                             <p><b>Projet</b> : ${env.JOB_NAME}</p>
                             <p><b>Build</b> : #${env.BUILD_NUMBER}</p>
-                            
                             <p>Le DAG Airflow <b>${DAG_ID}</b> n’a pas été déclenché, car les tests ont échoué.</p>
-                            
-                            <h3>📄 Rapports</h3>
-                            <ul>
-                                <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
-                                <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20ML_20Pipeline/">Tests ML Pipeline</a></li>
-                                <li><a href="${env.BUILD_URL}Integration_20Tests_20-_20ML/">Tests Intégration</a></li>
-                                <li><a href="${env.BUILD_URL}console">Console Output</a></li>
-                            </ul>
-                            
-                            <p><b>Merci de corriger les erreurs avant de relancer le pipeline.</b></p>
-                            
+                            <p><a href="${env.BUILD_URL}console">Voir les logs Jenkins</a></p>
                             <p>Cordialement,<br/>Jenkins CI</p>
                         </body>
                         </html>
                     """,
                     to: 'enguyen.fr@gmail.com',
                     from: 'enguyen.fr@gmail.com',
-                    replyTo: 'enguyen.fr@gmail.com',
                     mimeType: 'text/html'
                 )
             }
         }
-        
+
         cleanup {
-            echo "🧹 Nettoyage final de l'espace de travail..."
+            echo "🧹 Nettoyage final..."
             cleanWs()
         }
     }
