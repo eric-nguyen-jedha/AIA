@@ -177,34 +177,36 @@ pipeline {
             }
         }
 
-        // ✅ NOUVEAU STAGE : déclenchement du DAG Airflow depuis le conteneur Jenkins principal
+                // ✅ NOUVEAU STAGE : déclenchement du DAG Airflow depuis le host Jenkins
         stage('Trigger Airflow DAG') {
-            agent any
+            agent none   // ⚠️ désactive l'agent docker par défaut
             steps {
-                script {
-                    echo "🚀 Déclenchement du DAG Airflow '${DAG_ID}' sur le scheduler..."
+                node {
+                    script {
+                        echo "🚀 Déclenchement du DAG Airflow '${DAG_ID}' sur le scheduler (depuis le host Jenkins)..."
 
-                    sh """
-                        docker exec ${AIRFLOW_CONTAINER} bash -c '
-                            echo "➡️ Vérification du CLI Airflow..."
-                            airflow version || exit 1
+                        sh """
+                            docker exec ${AIRFLOW_CONTAINER} bash -c '
+                                echo "➡️ Vérification du CLI Airflow..."
+                                airflow version || exit 1
 
-                            echo "🚀 Déclenchement du DAG ${DAG_ID}..."
-                            airflow dags trigger ${DAG_ID} --conf "{\\"triggered_by\\": \\"jenkins\\", \\"build_number\\": \\"${BUILD_NUMBER}\\"}"
+                                echo "🚀 Déclenchement du DAG ${DAG_ID}..."
+                                airflow dags trigger ${DAG_ID} --conf "{\\"triggered_by\\": \\"jenkins\\", \\"build_number\\": \\"${BUILD_NUMBER}\\"}"
 
-                            echo "⏳ Attente 5 secondes..."
-                            sleep 5
+                                echo "⏳ Attente 5 secondes..."
+                                sleep 5
 
-                            echo "📋 Liste des exécutions récentes :"
-                            airflow dags list-runs -d ${DAG_ID} --no-color | head -n 10
-                        '
-                    """
+                                echo "📋 Liste des exécutions récentes :"
+                                airflow dags list-runs -d ${DAG_ID} --no-color | head -n 10
+                            '
+                        """
 
-                    echo "✅ DAG '${DAG_ID}' déclenché avec succès dans Airflow."
+                        echo "✅ DAG '${DAG_ID}' déclenché avec succès dans Airflow."
+                    }
                 }
             }
         }
-    }
+
 
     post {
         success {
