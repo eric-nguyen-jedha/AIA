@@ -1,5 +1,5 @@
 // ===============================
-// ✅ Jenkinsfile complet et stable
+// ✅ Jenkinsfile complet et final (avec déclenchement CLI)
 // ===============================
 
 // Variables globales pour stocker les résultats des tests
@@ -22,9 +22,6 @@ pipeline {
         ML_REPORT = "${REPORT_DIR}/ml"
         INTEGRATION_REPORT = "${REPORT_DIR}/integration"
         DAG_ID = "etl_weather_dag"
-        AIRFLOW_HOST = "http://host.docker.internal:8080"
-        AIRFLOW_USER = "admin"
-        AIRFLOW_PASSWORD = "admin"
     }
     
     stages {
@@ -33,7 +30,11 @@ pipeline {
             steps {
                 dir("${WORK_DIR}") {
                     sh '''
-                        apt-get update && apt-get install -y --no-install-recommends gcc ssh curl
+                        echo "📦 Installation des dépendances système et Python..."
+                        # Mise à jour des paquets et installation de curl ET du client Docker
+                        apt-get update && apt-get install -y --no-install-recommends gcc ssh curl docker.io
+                        
+                        # Installation des dépendances Python
                         pip install --upgrade pip
                         pip install -r requirements.txt
                     '''
@@ -145,7 +146,6 @@ pipeline {
                                     return 0
                                 }
                                 def reportContent = readFile(reportPath)
-                                // CORRECTION ICI : Remplacement de \\d+ par \d+
                                 def matcher = (reportContent =~ /<testsuite[^>]* tests="(\d+)"/)
                                 if (matcher.find()) {
                                     def count = matcher.group(1).toInteger()
@@ -180,24 +180,17 @@ pipeline {
             }
         }
 
-        // ===============================
-        // 🔥 Déclenchement du DAG Airflow via API REST
-        // ===============================
         stage('Trigger Airflow DAG via CLI') {
             steps {
                 script {
                     echo "🚀 Déclenchement du DAG '${DAG_ID}' via la CLI Airflow..."
-
-                    // 1. On trouve le nom du conteneur du scheduler, car il peut toujours exécuter des commandes Airflow.
-                    //    NOTE : Il faut adapter le nom si nécessaire (ex: 'airflow-scheduler', 'airflow-airflow-scheduler-1')
-                    //    La commande `docker ps` vous donnera le nom exact.
+                    
+                    // Le nom du conteneur scheduler identifié avec 'docker ps'
                     def schedulerContainerName = "airflow-airflow-scheduler-1" 
 
                     echo "   -> Conteneur cible : ${schedulerContainerName}"
 
-                    // 2. On exécute la commande 'airflow dags trigger' à l'intérieur de ce conteneur.
-                    //    Le '|| true' est une sécurité pour ne pas faire échouer le build si le conteneur n'est pas trouvé
-                    //    immédiatement, bien qu'on puisse le rendre plus strict.
+                    // Exécution de la commande 'airflow dags trigger' à l'intérieur du conteneur
                     sh """
                         docker exec ${schedulerContainerName} airflow dags trigger ${DAG_ID}
                     """
@@ -206,6 +199,7 @@ pipeline {
                 }
             }
         }
+
     }
 
     post {
@@ -227,7 +221,7 @@ pipeline {
                                 <li>Tests d'intégration : ${integrationTests} tests</li>
                             </ul>
                             <h3>🚀 Airflow</h3>
-                            <p>Le DAG <b>${DAG_ID}</b> a été déclenché avec succès via l'API REST.</p>
+                            <p>Le DAG <b>${DAG_ID}</b> a été déclenché avec succès via la CLI.</p>
                             <h3>📄 Rapports</h3>
                             <ul>
                                 <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
