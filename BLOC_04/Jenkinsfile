@@ -205,45 +205,48 @@ EOF
     
     post {
     success {
-        echo "✅ All tests passed!"
+        echo "✅ All tests passed! Starting email notification process..."
         script {
-            // Compter les tests de manière fiable
-            def unitTests = 0
-            def mlTests = 0
-            def integrationTests = 0 // Le comptage pour ce rapport n'était pas implémenté
+            // Définition d'une fonction pour parser les rapports de manière robuste
+            def getTestCount(String reportPath) {
+                try {
+                    // Vérifier si le fichier existe avant de tenter de le lire
+                    if (!fileExists(reportPath)) {
+                        echo "⚠️ Fichier de rapport introuvable à l'emplacement : ${reportPath}"
+                        return 0
+                    }
 
-            try {
-                def unitXml = readFile("${REPORT_DIR}/unit/report.xml")
-                // Utilise un Matcher pour trouver la première occurrence et capturer le groupe (le nombre)
-                def unitMatcher = (unitXml =~ /<testsuite[^>]* tests="(\d+)"/)
-                if (unitMatcher.find()) {
-                    unitTests = unitMatcher.group(1).toInteger()
+                    echo "📄 Lecture du fichier de rapport : ${reportPath}"
+                    def reportContent = readFile(reportPath)
+                    
+                    // Si le fichier est vide, retourner 0
+                    if (reportContent.trim().isEmpty()) {
+                        echo "⚠️ Le fichier de rapport est vide : ${reportPath}"
+                        return 0
+                    }
+
+                    // Utiliser XmlSlurper pour une analyse XML fiable
+                    def reportXml = new groovy.util.XmlSlurper().parseText(reportContent)
+                    
+                    // Extraire le nombre de tests. L'attribut 'tests' est sur la balise <testsuite>
+                    // Pytest encapsule souvent <testsuite> dans une balise <testsuites>
+                    def testCount = reportXml.testsuite.'@tests'.sum { it.toInteger() }
+                    
+                    echo "📊 Nombre de tests trouvés dans ${reportPath} : ${testCount}"
+                    return testCount
+
+                } catch (Exception e) {
+                    echo "❌ Erreur lors de l'analyse du fichier XML ${reportPath}."
+                    echo "   Message d'erreur : ${e.getMessage()}"
+                    return 0
                 }
-            } catch (Exception e) {
-                echo "Attention : Le rapport de tests unitaires (Data Pipeline) n'a pas pu être lu. Détails : ${e}"
             }
+
+            // Appeler la fonction pour chaque rapport
+            def unitTests = getTestCount("${REPORT_DIR}/unit/report.xml")
+            def mlTests = getTestCount("${REPORT_DIR}/ml/report.xml")
+            def integrationTests = getTestCount("${REPORT_DIR}/integration/report.xml")
             
-            try {
-                def mlXml = readFile("${REPORT_DIR}/ml/report.xml")
-                def mlMatcher = (mlXml =~ /<testsuite[^>]* tests="(\d+)"/)
-                if (mlMatcher.find()) {
-                    mlTests = mlMatcher.group(1).toInteger()
-                }
-            } catch (Exception e) {
-                echo "Attention : Le rapport de tests unitaires (ML Pipeline) n'a pas pu être lu. Détails : ${e}"
-            }
-
-            try {
-                def integrationXml = readFile("${REPORT_DIR}/integration/report.xml")
-                def integrationMatcher = (integrationXml =~ /<testsuite[^>]* tests="(\d+)"/)
-                if (integrationMatcher.find()) {
-                    integrationTests = integrationMatcher.group(1).toInteger()
-                }
-            } catch (Exception e) {
-                echo "Attention : Le rapport de tests d'intégration n'a pas pu être lu. Détails : ${e}"
-            }
-
-            // Le reste de votre script d'envoi d'email reste identique...
             emailext(
                 subject: "✅ Tests réussis - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: """
