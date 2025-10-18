@@ -379,6 +379,7 @@ class TestTrainingPipelineIntegration:
         assert 'month' in df.columns
         assert len(df) == 200
     
+    @pytest.mark.integration
     def test_label_encoder_save_and_load(self):
         """Test de sauvegarde et chargement du LabelEncoder"""
         le = LabelEncoder()
