@@ -1,5 +1,5 @@
 // ===============================
-// ✅ Jenkinsfile complet et stable avec déclenchement Airflow
+// ✅ Jenkinsfile complet et stable
 // ===============================
 
 // Variables globales pour stocker les résultats des tests
@@ -21,12 +21,11 @@ pipeline {
         UNIT_REPORT = "${REPORT_DIR}/unit"
         ML_REPORT = "${REPORT_DIR}/ml"
         INTEGRATION_REPORT = "${REPORT_DIR}/integration"
-        AIRFLOW_CONTAINER = "airflow-airflow-scheduler-1"  // conteneur Airflow à adapter
+        AIRFLOW_CONTAINER = "airflow-airflow-scheduler-1"
         DAG_ID = "etl_weather_dag"
     }
 
     stages {
-
         stage('Install dependencies') {
             steps {
                 dir("${WORK_DIR}") {
@@ -143,7 +142,7 @@ pipeline {
                                     return 0
                                 }
                                 def reportContent = readFile(reportPath)
-                                def matcher = (reportContent =~ /<testsuite[^>]* tests="(\d+)"/)
+                                def matcher = (reportContent =~ /<testsuite[^>]* tests="(\\d+)"/)
                                 if (matcher.find()) {
                                     def count = matcher.group(1).toInteger()
                                     echo "   -> ${count} test(s) trouvés dans ${reportPath}"
@@ -177,32 +176,28 @@ pipeline {
             }
         }
 
-        // 🔥 NOUVEAU STAGE : déclenchement du DAG Airflow depuis le nœud maître Jenkins
         stage('Trigger Airflow DAG') {
-            agent none
             steps {
-                node('master') {
-                    script {
-                        echo "🚀 Déclenchement du DAG Airflow '${DAG_ID}' sur le scheduler..."
+                script {
+                    echo "🚀 Déclenchement du DAG Airflow '${DAG_ID}' sur le scheduler..."
 
-                        sh """
-                            docker exec ${AIRFLOW_CONTAINER} bash -c '
-                                echo "➡️ Vérification du CLI Airflow..."
-                                airflow version || exit 1
+                    sh """
+                        docker exec ${AIRFLOW_CONTAINER} bash -c '
+                            echo "➡️ Vérification du CLI Airflow..."
+                            airflow version || exit 1
 
-                                echo "🚀 Déclenchement du DAG ${DAG_ID}..."
-                                airflow dags trigger ${DAG_ID} --conf "{\\"triggered_by\\": \\"jenkins\\", \\"build_number\\": \\"${BUILD_NUMBER}\\"}"
+                            echo "🚀 Déclenchement du DAG ${DAG_ID}..."
+                            airflow dags trigger ${DAG_ID} --conf "{\\"triggered_by\\": \\"jenkins\\", \\"build_number\\": \\"${BUILD_NUMBER}\\"}"
 
-                                echo "⏳ Attente 5 secondes..."
-                                sleep 5
+                            echo "⏳ Attente 5 secondes..."
+                            sleep 5
 
-                                echo "📋 Liste des exécutions récentes :"
-                                airflow dags list-runs -d ${DAG_ID} --no-color | head -n 10
-                            '
-                        """
+                            echo "📋 Liste des exécutions récentes :"
+                            airflow dags list-runs -d ${DAG_ID} --no-color | head -n 10
+                        '
+                    """
 
-                        echo "✅ DAG '${DAG_ID}' déclenché avec succès dans Airflow."
-                    }
+                    echo "✅ DAG '${DAG_ID}' déclenché avec succès dans Airflow."
                 }
             }
         }
