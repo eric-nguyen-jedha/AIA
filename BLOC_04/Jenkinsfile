@@ -49,7 +49,7 @@ pipeline {
                     '''
                 }
             }
-        }
+        
         
         stage('Run unit tests - Data Pipeline') {
             steps {
