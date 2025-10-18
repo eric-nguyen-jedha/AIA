@@ -1,5 +1,5 @@
 // ===============================
-// ✅ Jenkinsfile complet et final (avec déclenchement CLI)
+// ✅ Jenkinsfile complet et final (avec vérification de l'installation de Docker)
 // ===============================
 
 // Variables globales pour stocker les résultats des tests
@@ -30,11 +30,19 @@ pipeline {
             steps {
                 dir("${WORK_DIR}") {
                     sh '''
-                        echo "📦 Installation des dépendances système et Python..."
-                        # Mise à jour des paquets et installation de curl ET du client Docker
+                        echo "📦 Installation des dépendances système (avec nettoyage du cache)..."
+                        # On nettoie les listes apt pour forcer une mise à jour fraîche
+                        rm -rf /var/lib/apt/lists/*
+                        
+                        # Installation des paquets, y compris le client Docker
                         apt-get update && apt-get install -y --no-install-recommends gcc ssh curl docker.io
                         
-                        # Installation des dépendances Python
+                        echo "✅ Vérification de l'installation de Docker..."
+                        # On vérifie que la commande 'docker' est bien installée ET dans le PATH
+                        # Si ce n'est pas le cas, on fait échouer le build ici avec une erreur claire.
+                        which docker || (echo "ERREUR: Le client Docker n'a pas été trouvé après l'installation." && exit 1)
+                        
+                        echo "🐍 Installation des dépendances Python..."
                         pip install --upgrade pip
                         pip install -r requirements.txt
                     '''
@@ -185,12 +193,10 @@ pipeline {
                 script {
                     echo "🚀 Déclenchement du DAG '${DAG_ID}' via la CLI Airflow..."
                     
-                    // Le nom du conteneur scheduler identifié avec 'docker ps'
                     def schedulerContainerName = "airflow-airflow-scheduler-1" 
 
                     echo "   -> Conteneur cible : ${schedulerContainerName}"
 
-                    // Exécution de la commande 'airflow dags trigger' à l'intérieur du conteneur
                     sh """
                         docker exec ${schedulerContainerName} airflow dags trigger ${DAG_ID}
                     """
