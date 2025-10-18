@@ -183,39 +183,26 @@ pipeline {
         // ===============================
         // 🔥 Déclenchement du DAG Airflow via API REST
         // ===============================
-        stage('Trigger Airflow DAG via API') {
+        stage('Trigger Airflow DAG via CLI') {
             steps {
                 script {
-                    echo "🚀 Tentative de déclenchement du DAG '${DAG_ID}' via l'API Airflow..."
-                    echo "   -> Hôte cible : ${AIRFLOW_HOST}"
-                    
-                    // L'endpoint est changé pour l'API expérimentale
-                    def apiUrl = "${AIRFLOW_HOST}/api/experimental/dags/${DAG_ID}/dag_runs"
-                    echo "   -> Endpoint API utilisé : ${apiUrl}"
+                    echo "🚀 Déclenchement du DAG '${DAG_ID}' via la CLI Airflow..."
 
-                    def payload = """
-                    {
-                        "conf": {
-                            "triggered_by": "jenkins",
-                            "build_number": "${BUILD_NUMBER}"
-                        }
-                    }
-                    """
+                    // 1. On trouve le nom du conteneur du scheduler, car il peut toujours exécuter des commandes Airflow.
+                    //    NOTE : Il faut adapter le nom si nécessaire (ex: 'airflow-scheduler', 'airflow-airflow-scheduler-1')
+                    //    La commande `docker ps` vous donnera le nom exact.
+                    def schedulerContainerName = "airflow-airflow-scheduler-1" 
 
-                    // On garde la version de débogage pour s'assurer que ça marche
+                    echo "   -> Conteneur cible : ${schedulerContainerName}"
+
+                    // 2. On exécute la commande 'airflow dags trigger' à l'intérieur de ce conteneur.
+                    //    Le '|| true' est une sécurité pour ne pas faire échouer le build si le conteneur n'est pas trouvé
+                    //    immédiatement, bien qu'on puisse le rendre plus strict.
                     sh """
-                        curl -v -f -s -X POST \\
-                            -H 'Content-Type: application/json' \\
-                            -u ${AIRFLOW_USER}:${AIRFLOW_PASSWORD} \\
-                            -d '${payload}' \\
-                            -o response.json \\
-                            '${apiUrl}'
+                        docker exec ${schedulerContainerName} airflow dags trigger ${DAG_ID}
                     """
-                    
-                    echo "📄 Réponse de l'API Airflow :"
-                    sh "cat response.json"
 
-                    echo "✅ Commande de déclenchement du DAG '${DAG_ID}' exécutée."
+                    echo "✅ Commande de déclenchement pour le DAG '${DAG_ID}' envoyée via la CLI."
                 }
             }
         }
