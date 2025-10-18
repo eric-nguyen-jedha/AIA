@@ -145,7 +145,8 @@ pipeline {
                                     return 0
                                 }
                                 def reportContent = readFile(reportPath)
-                                def matcher = (reportContent =~ /<testsuite[^>]* tests="(\\d+)"/)
+                                // CORRECTION ICI : Remplacement de \\d+ par \d+
+                                def matcher = (reportContent =~ /<testsuite[^>]* tests="(\d+)"/)
                                 if (matcher.find()) {
                                     def count = matcher.group(1).toInteger()
                                     echo "   -> ${count} test(s) trouvés dans ${reportPath}"
