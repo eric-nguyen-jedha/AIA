@@ -17,6 +17,8 @@ pipeline {
         UNIT_REPORT = "${REPORT_DIR}/unit"
         ML_REPORT = "${REPORT_DIR}/ml"
         INTEGRATION_REPORT = "${REPORT_DIR}/integration"
+        AIRFLOW_CONTAINER = "airflow-webserver"  // 🔧 nom du conteneur Airflow (à adapter)
+        DAG_ID = "etl_weather_dag"
     }
     
     stages {
@@ -24,7 +26,7 @@ pipeline {
             steps {
                 dir("${WORK_DIR}") {
                     sh '''
-                        apt-get update && apt-get install -y --no-install-recommends gcc
+                        apt-get update && apt-get install -y --no-install-recommends gcc ssh
                         pip install --upgrade pip
                         pip install -r requirements.txt
                     '''
@@ -112,7 +114,6 @@ pipeline {
             }
         }
         
-        // Ce stage a été restauré pour créer le répertoire 'summary' et éviter une erreur
         stage('Generate Test Summary') {
             steps {
                 dir("${WORK_DIR}") {
@@ -124,12 +125,11 @@ pipeline {
             }
         }
 
-        // Lecture des résultats avec une méthode qui ne requiert PAS d'approbation admin
         stage('Read Test Results') {
             steps {
                 dir("${WORK_DIR}") {
                     script {
-                        echo "📊 Lecture des résultats des tests (méthode 'Sandbox Safe')..."
+                        echo "📊 Lecture des résultats des tests (Sandbox Safe)..."
 
                         def getTestCount = { String reportPath ->
                             try {
@@ -138,10 +138,7 @@ pipeline {
                                     return 0
                                 }
                                 def reportContent = readFile(reportPath)
-                                
-                                // Regex robuste qui est autorisée dans le Sandbox de Jenkins
                                 def matcher = (reportContent =~ /<testsuite[^>]* tests="(\d+)"/)
-                                
                                 if (matcher.find()) {
                                     def count = matcher.group(1).toInteger()
                                     echo "   -> Trouvé ${count} test(s) dans ${reportPath}"
@@ -174,7 +171,34 @@ pipeline {
                 publishHTML(target: [ reportDir: "${REPORT_DIR}/summary", reportFiles: "summary.html", reportName: "Test Summary", keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true ])
             }
         }
-    }
+
+                // 🔥 NOUVEAU STAGE : Déclenchement du DAG Airflow via CLI
+        stage('Trigger Airflow DAG') {
+            steps {
+                script {
+                    echo "🚀 Déclenchement du DAG Airflow '${DAG_ID}' sur le scheduler..."
+
+                    sh """
+                        docker exec airflow-airflow-scheduler-1 bash -c '
+                            echo "➡️ Vérification du CLI Airflow..."
+                            airflow version || exit 1
+
+                            echo "🚀 Déclenchement du DAG ${DAG_ID}..."
+                            airflow dags trigger ${DAG_ID} --conf "{\\"triggered_by\\": \\"jenkins\\", \\"build_number\\": \\"${BUILD_NUMBER}\\"}"
+
+                            echo "⏳ Attente 5 secondes pour confirmation..."
+                            sleep 5
+
+                            echo "📋 Vérification des exécutions récentes :"
+                            airflow dags list-runs -d ${DAG_ID} --no-color | head -n 10
+                        '
+                    """
+
+                    echo "✅ DAG '${DAG_ID}' déclenché avec succès dans Airflow."
+                }
+            }
+        }
+
     
     post {
         success {
@@ -196,6 +220,9 @@ pipeline {
                                 <li>Tests d'intégration : ${integrationTests} tests</li>
                             </ul>
                             
+                            <h3>🚀 Airflow</h3>
+                            <p>Le DAG <b>${DAG_ID}</b> a été déclenché avec succès.</p>
+                            
                             <h3>📄 Rapports</h3>
                             <ul>
                                 <li><a href="${env.BUILD_URL}Unit_20Tests_20-_20Data_20Pipeline/">Tests Data Pipeline</a></li>
@@ -204,7 +231,7 @@ pipeline {
                                 <li><a href="${env.BUILD_URL}Integration_20Tests_20-_20ML/">Tests Intégration</a></li>
                             </ul>
                             
-                            <p><i>Tous les tests ont été exécutés avec succès ! 🎉</i></p>
+                            <p><i>Tous les tests ont été exécutés avec succès et Airflow a été notifié 🎉</i></p>
                             
                             <p>Cordialement,<br/>Jenkins CI</p>
                         </body>
@@ -230,8 +257,7 @@ pipeline {
                             <p><b>Projet</b> : ${env.JOB_NAME}</p>
                             <p><b>Build</b> : #${env.BUILD_NUMBER}</p>
                             
-                            <h3>⚠️ Action requise</h3>
-                            <p>Un ou plusieurs tests ont échoué. Merci de consulter les rapports ci-dessous :</p>
+                            <p>Le DAG Airflow <b>${DAG_ID}</b> n’a pas été déclenché, car les tests ont échoué.</p>
                             
                             <h3>📄 Rapports</h3>
                             <ul>
@@ -241,7 +267,7 @@ pipeline {
                                 <li><a href="${env.BUILD_URL}console">Console Output</a></li>
                             </ul>
                             
-                            <p><b>Merci de corriger les erreurs dès que possible.</b></p>
+                            <p><b>Merci de corriger les erreurs avant de relancer le pipeline.</b></p>
                             
                             <p>Cordialement,<br/>Jenkins CI</p>
                         </body>
@@ -256,7 +282,6 @@ pipeline {
         }
         
         cleanup {
-            // Cette action est garantie de s'exécuter en tout dernier
             echo "🧹 Nettoyage final de l'espace de travail..."
             cleanWs()
         }
