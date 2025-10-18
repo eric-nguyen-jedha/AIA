@@ -207,7 +207,7 @@ EOF
     success {
         echo "✅ All tests passed! Starting email notification process..."
         script {
-            // Définition de la logique de comptage sous forme de Closure (syntaxe valide ici)
+            // Définition de la logique de comptage sous forme de Closure
             def getTestCount = { String reportPath ->
                 try {
                     if (!fileExists(reportPath)) {
@@ -224,8 +224,6 @@ EOF
                     }
 
                     def reportXml = new groovy.util.XmlSlurper().parseText(reportContent)
-                    
-                    // L'opérateur '..' recherche en profondeur dans l'arbre XML, ce qui est plus robuste
                     def testCount = reportXml.'**'.find { it.name() == 'testsuite' }.'@tests'.toInteger()
                     
                     echo "📊 Nombre de tests trouvés dans ${reportPath} : ${testCount}"
