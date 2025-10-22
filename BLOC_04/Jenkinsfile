@@ -13,7 +13,7 @@ pipeline {
             image 'python:3.10-slim'
             args '-u root:root'
         }
-    }
+    }test
     
     environment {
         WORK_DIR = "BLOC_04"
@@ -224,7 +224,7 @@ pipeline {
             echo "✅ Pipeline terminé avec succès."
             script {
                 emailext(
-                    subject: "✅ Tests réussis - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    subject: "Jenkins - 🎀 - : Tests réussis - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                     body: """
                         <html>
                         <body>
@@ -246,6 +246,7 @@ pipeline {
                                 <li><a href="${env.BUILD_URL}Coverage_20Report_20-_20ML/">Couverture ML</a></li>
                                 <li><a href="${env.BUILD_URL}Integration_20Tests_20-_20ML/">Tests Intégration</a></li>
                             </ul>
+                            <p><em> Votre Staff Jenkins 🎀 </p>
                         </body>
                         </html>
                     """,
