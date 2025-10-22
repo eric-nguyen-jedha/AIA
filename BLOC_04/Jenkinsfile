@@ -13,7 +13,7 @@ pipeline {
             image 'python:3.10-slim'
             args '-u root:root'
         }
-    }test
+    }
     
     environment {
         WORK_DIR = "BLOC_04"
