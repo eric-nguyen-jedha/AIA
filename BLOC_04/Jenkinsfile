@@ -224,7 +224,7 @@ pipeline {
             echo "✅ Pipeline terminé avec succès."
             script {
                 emailext(
-                    subject: "Jenkins - 🎀 - : Tests réussis - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    subject: "- 🎀 - Jenkins : Tests réussis - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                     body: """
                         <html>
                         <body>
