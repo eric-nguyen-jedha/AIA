@@ -273,7 +273,7 @@ pipeline {
                         </body>
                         </html>
                     """,
-                    to: 'enguyen.fr@gmail.com',
+                    to: 'en9.eric@gmail.com',
                     from: 'Jenkin Meteo',
                     mimeType: 'text/html'
                 )
