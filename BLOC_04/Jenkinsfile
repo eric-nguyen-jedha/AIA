@@ -250,7 +250,7 @@ pipeline {
                         </body>
                         </html>
                     """,
-                    to: 'enguyen.fr@gmail.com',
+                    to: 'en9.eric@gmail.com',
                     from: 'enguyen.fr@gmail.com',
                     mimeType: 'text/html'
                 )
