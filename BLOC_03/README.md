@@ -12,91 +12,40 @@ Le pipeline est orchestré avec **Apache Airflow**, et les artefacts sont stock�
 
 ```mermaid
 graph TD
-    subgraph "Data Source & Ingestion"
-        A[S3 CSV] -->|Pull| B[Data Pull & Check]
-        C[API Transactions] -->|Real-time| D[Predict]
-    end
+    %% === Sources de données ===
+    A[S3 CSV] --> B[Data Pull & Check]
+    C[API Transactions] --> D[Predict]
 
-    subgraph "Airflow DAGs (Orchestration)"
-        B[Data Pull & Check] --> E[ML Training]
-        E --> F[Model Registry]
-        D --> G[Email not.]
-    end
+    %% === Nouvelle notification : Data Team ===
+    B --> E[Email Alert to Data Team]
 
-    subgraph "MLflow (Model Management)"
-        F[Model Registry] --> H[Metrics]
-        F --> I[Artifact Model]
-        H --> J[PostgreSQL NEON]
-        I --> K[S3 Model]
-    end
+    %% === Orchestration Airflow ===
+    B --> F[ML Training]
+    F --> G[Model Registry]
+    D --> H[Email Notification to Anti Fraud Team]
 
-    subgraph "Output & Monitoring"
-        G --> L[Anti Fraud Team Email]
-        D --> M[S3 Predict Backup]
-        M --> N[PostgreSQL NEON]
-        N --> O[Streamlit Dashboard]
-        O --> P[Dashboard for Anti Fraud Team Stakeholder]
-    end
+    %% === MLflow ===
+    G --> I[Metrics]
+    G --> J[Artifact Model]
+    I --> K[PostgreSQL NEON]
+    J --> L[S3 Model]
 
-    %% Connexions externes
-    style A fill:#FFD700,stroke:#333
-    style C fill:#4CAF50,stroke:#333
-    style B fill:#2196F3,stroke:#fff
-    style D fill:#2196F3,stroke:#fff
-    style E fill:#9C27B0,stroke:#fff
-    style F fill:#FF9800,stroke:#fff
-    style H fill:#8BC34A,stroke:#fff
-    style I fill:#FF5722,stroke:#fff
-    style J fill:#E91E63,stroke:#fff
-    style K fill:#00BCD4,stroke:#fff
-    style L fill:#FFEB3B,stroke:#333
-    style M fill:#009688,stroke:#fff
-    style N fill:#673AB7,stroke:#fff
-    style O fill:#FF9800,stroke:#fff
-    style P fill:#3F51B5,stroke:#fff
+    %% === Sauvegarde & Monitoring ===
+    D --> M[S3 Predict Backup]
+    M --> N[PostgreSQL NEON]
+    N --> O[Streamlit Dashboard]
+    O --> P[Dashboard for Anti Fraud Team Stakeholder]
 
-    %% Flèches
-    A --> B
-    C --> D
-    B --> E
-    E --> F
-    F --> H
-    F --> I
-    H --> J
-    I --> K
-    D --> G
-    G --> L
-    D --> M
-    M --> N
-    N --> O
-    O --> P
+    %% === Styles sobres en gris ===
+    classDef source fill:#f8f9fa,stroke:#666;
+    classDef process fill:#f1f3f5,stroke:#666;
+    classDef storage fill:#e9ecef,stroke:#666;
+    classDef notification fill:#ffffff,stroke:#666,stroke-dasharray: 3 3;
 
-    %% Labels
-    A:::data-source
-    C:::api-source
-    B:::airflow-task
-    D:::airflow-task
-    E:::airflow-task
-    F:::mlflow-component
-    H:::mlflow-component
-    I:::mlflow-component
-    J:::storage
-    K:::storage
-    L:::notification
-    M:::backup
-    N:::storage
-    O:::dashboard
-    P:::stakeholder
-
-    classDef data-source fill:#FFD700,stroke:#333,stroke-width:2px
-    classDef api-source fill:#4CAF50,stroke:#333,stroke-width:2px
-    classDef airflow-task fill:#2196F3,stroke:#fff,stroke-width:2px
-    classDef mlflow-component fill:#FF9800,stroke:#fff,stroke-width:2px
-    classDef storage fill:#673AB7,stroke:#fff,stroke-width:2px
-    classDef notification fill:#FFEB3B,stroke:#333,stroke-width:2px
-    classDef backup fill:#009688,stroke:#fff,stroke-width:2px
-    classDef dashboard fill:#FF9800,stroke:#fff,stroke-width:2px
-    classDef stakeholder fill:#3F51B5,stroke:#fff,stroke-width:2px
+    class A,C source
+    class B,D,F,G,H,E,M,O process
+    class K,L,N storage
+    class H,E,P notification
 
 ```
 
@@ -120,7 +69,7 @@ graph TD
 
 ```
 
-## 1️⃣ DAG evidently_data_quality_fraud
+## 1️⃣ DAG fraud_detection_01_evidently_data_quality
 
 Objectif : Vérifier la qualité des données avant l'entraînement.
 Fonctionnalités :
@@ -131,13 +80,22 @@ Fonctionnalités :
 - send_evidently_report_email : Envoie un email de résumé avec les liens vers les rapports.
 - trigger_xgboost_dag : Déclenche le DAG suivant (fraud_detection_xgboost_dag) en passant le chemin du fichier CSV.
 
-## 2️⃣ DAG fraud_detection_xgboost_dag
+## 2️⃣ DAG fraud_detection_02_xgboost_dag
 Objectif : Entraîner un modèle XGBoost pour détecter les fraudes.
 Fonctionnalités :
 
-- get_data : Récupère le chemin du fichier CSV passé par le DAG précédent (dag_run.conf).
+- load_csv : Récupère le chemin du fichier CSV passé par le DAG précédent (dag_run.conf).
 - clean_data : Nettoie les données (feature engineering, encodage, etc.).
-- train_model : Entraîne un modèle XGBoost avec suivi des métriques via MLflow. Sauvegarde la matrice de confusion et log le modèle.
+- train_mlflow : Entraîne un modèle XGBoost avec suivi des métriques via MLflow. Sauvegarde la matrice de confusion et log le modèle.
+
+## 2️⃣ DAG fraud_detection_03_prediction_api
+Objectif : Faire une prédiction en temps réel d'une Fraude .
+Fonctionnalités :
+
+- fetch_transactions : Récupère la transaction qui vient de l'API.
+- preprocess_data : Nettoie les données et les rend conforme au modèle d'entrainement
+- predict_and_save : Faire une prédiction avec le code Predict de MLFLOW et sauvegarder le résultat dans un CSV mais aussi dans la Base Neon BD (PostgreSQL)
+- upload_and_alert : Upload les résultats dans un fichier CSV et envoie une notification à l'équipe DATA
 
 ## Variable #Airflow
 
