@@ -21,7 +21,7 @@ pipeline {
         UNIT_REPORT = "${REPORT_DIR}/unit"
         ML_REPORT = "${REPORT_DIR}/ml"
         INTEGRATION_REPORT = "${REPORT_DIR}/integration"
-        DAG_ID = "etl_weather_dag"
+        DAG_ID = "meteo_01_etl"
     }
     
     stages {
